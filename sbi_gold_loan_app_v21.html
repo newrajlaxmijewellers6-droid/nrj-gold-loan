@@ -18,6 +18,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:Arial,sans-serif;background:#f4f1eb;color:#1a1a1a;font-size:14px;-webkit-text-size-adjust:100%}
@@ -213,6 +214,18 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
   .inv-item-row{grid-template-columns:1fr 46px 70px 30px}
   .inv-item-row input{font-size:12px;padding:5px 6px;min-height:36px}
 }
+
+/* ── LOGIN SCREEN ── */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,#0f2550,#1a3a6b);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px}
+.login-box{background:#fff;border-radius:16px;padding:32px 28px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center}
+.login-logo{width:56px;height:56px;background:linear-gradient(135deg,#d4a017,#b8860b);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 14px}
+.login-box h2{font-size:20px;font-weight:700;color:#1a3a6b;margin-bottom:4px}
+.login-box p{font-size:12px;color:#888;margin-bottom:20px}
+.login-box input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:10px;outline:none;transition:border .2s}
+.login-box input:focus{border-color:#1a3a6b}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,#1a3a6b,#0f2550);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+.login-btn:hover{filter:brightness(1.15)}
+.login-err{color:#b01c1c;font-size:12px;margin-top:8px;min-height:18px}
 </style>
 </head>
 <body>
@@ -224,6 +237,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
     <h1>Gold Loan Certificate App — New Rajlaxmi Jewellers</h1>
     <p>State Bank of India · Lohogaon, Pune</p>
   </div>
+  <button onclick="doLogout()" id="logoutBtn" style="display:none;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit">Sign Out</button>
   <div id="autosave-indicator" onclick="setupAutoSave()" title="Click to enable auto-save to file" style="font-size:10px;color:#aac4f0;text-align:center;flex-shrink:0;cursor:pointer;line-height:1.4;padding:2px 6px;border-radius:6px;border:1px solid rgba(255,255,255,.15)">
     <div id="autosave-icon" style="font-size:15px">💾</div>
     <div id="autosave-text">Auto-Save<br>Off</div>
@@ -3577,14 +3591,73 @@ function showLoanSyncBadge(state){
 
 // Cloud push hooks injected directly into save functions below
 
+
+// ── FIREBASE AUTH ──────────────────────────────────────────
+function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginErr');
+  err.textContent='Signing in...';
+  firebase.app('nrj-loan').auth().signInWithEmailAndPassword(email,pass)
+    .then(()=>{err.textContent='';})
+    .catch(e=>{
+      if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')err.textContent='Wrong password. Try again.';
+      else if(e.code==='auth/user-not-found')err.textContent='Email not found.';
+      else if(e.code==='auth/invalid-email')err.textContent='Invalid email.';
+      else err.textContent='Error: '+e.message;
+    });
+}
+function doLogout(){
+  if(confirm('Sign out?'))firebase.app('nrj-loan').auth().signOut();
+}
+// ── END AUTH ───────────────────────────────────────────────
+
 // Init Firebase when ready
 (function startLoanCloud(){
   if(typeof firebase==='undefined'){setTimeout(startLoanCloud,80);return;}
   const cfg=getLoanFBConfig()||FB_DEFAULT_LOAN;
   saveLoanFBConfig(cfg);
-  initLoanFirebase(cfg);
+  // Init app for auth
+  const appName='nrj-loan';
+  let app=firebase.apps.find(a=>a.name===appName);
+  if(!app){
+    app=firebase.initializeApp({
+      apiKey:cfg.apiKey,
+      authDomain:cfg.projectId+'.firebaseapp.com',
+      databaseURL:cfg.databaseURL,
+      projectId:cfg.projectId
+    },appName);
+  }
+  // Watch auth state
+  app.auth().onAuthStateChanged(user=>{
+    const screen=document.getElementById('loginScreen');
+    const logoutBtn=document.getElementById('logoutBtn');
+    if(user){
+      if(screen)screen.style.display='none';
+      if(logoutBtn)logoutBtn.style.display='inline-block';
+      // Connect database
+      initLoanFirebase(cfg);
+    } else {
+      if(screen)screen.style.display='flex';
+      if(logoutBtn)logoutBtn.style.display='none';
+    }
+  });
 })();
 
 </script>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">💎</div>
+    <h2>NRJ Gold Loan App</h2>
+    <p>New Rajlaxmi Jewellers — Please sign in</p>
+    <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">🔐 Sign In</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
 </body>
 </html>

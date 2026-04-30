@@ -11,6 +11,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
 window._installPrompt=null;
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window._installPrompt=e;document.addEventListener('DOMContentLoaded',function(){showInstallUI();});});
@@ -148,6 +149,20 @@ table.stbl tr.snet td{background:linear-gradient(135deg,var(--burg),var(--burg2)
 ::-webkit-scrollbar-track{background:var(--sf2)}
 ::-webkit-scrollbar-thumb{background:var(--burg4);border-radius:3px}
 @media(max-width:580px){.sumg{grid-template-columns:repeat(2,1fr)}.sg{grid-template-columns:1fr}.punch-box{grid-template-columns:1fr 1fr}}
+
+/* ── LOGIN SCREEN ── */
+#loginScreen{position:fixed;inset:0;background:linear-gradient(135deg,#3d0e1a,#6b1a2a);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px}
+.login-box{background:#fff;border-radius:16px;padding:32px 28px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center}
+.login-logo{width:56px;height:56px;background:linear-gradient(135deg,#d4a827,#b8860b);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;color:#fff;margin:0 auto 14px}
+.login-box h2{font-family:'Cormorant Garamond',serif;font-size:22px;color:#3d0e1a;margin-bottom:4px}
+.login-box p{font-size:12px;color:#888;margin-bottom:20px}
+.login-box input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;margin-bottom:10px;outline:none;transition:border .2s}
+.login-box input:focus{border-color:#b8860b}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg,#d4a827,#b8860b);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px}
+.login-btn:hover{filter:brightness(1.08)}
+.login-err{color:#b01c1c;font-size:12px;margin-top:8px;min-height:18px}
+.logout-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#e8c880;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-family:inherit}
+.logout-btn:hover{background:rgba(255,255,255,.1)}
 </style>
 </head>
 <body>
@@ -161,6 +176,7 @@ table.stbl tr.snet td{background:linear-gradient(135deg,var(--burg),var(--burg2)
     </div>
   </div>
   <div class="tb-right">
+    <button class="logout-btn" onclick="doLogout()" id="logoutBtn" style="display:none">Sign Out</button>
     <span id="liveclock" style="font-size:12px;color:#e8c880;font-family:'DM Mono',monospace"></span>
     <select class="msel" id="monthSel" onchange="onMonthChange()"></select>
     <button id="topInstallBtn" class="btn btn-sm btn-gold" style="display:none" onclick="installApp()">⬇ Install</button>
@@ -434,8 +450,15 @@ function saveFBConfig(cfg){localStorage.setItem(FB_KEY,JSON.stringify(cfg));}
 
 function initFirebase(cfg){
   try{
-    if(firebase.apps.length)firebase.apps.forEach(a=>a.delete());
-    firebase.initializeApp(cfg);
+    // Don't re-init if already initialized by auth
+    if(!firebase.apps.find(a=>a.name==='[DEFAULT]')){
+      firebase.initializeApp({
+        apiKey:cfg.apiKey,
+        authDomain:cfg.projectId+'.firebaseapp.com',
+        databaseURL:cfg.databaseURL,
+        projectId:cfg.projectId
+      });
+    }
     fbDB=firebase.database();
     fbRef=fbDB.ref('nrj_data');
     showSyncBadge('connecting');
@@ -1345,23 +1368,84 @@ function printAttReport(){
     <div style="text-align:center;min-width:160px"><div style="border-top:1px solid #aaa;padding-top:5px;margin-top:32px">Accountant</div></div>
     <div style="text-align:center;min-width:160px"><div style="border-top:1px solid #aaa;padding-top:5px;margin-top:32px">Manager / Owner — NEW RAJLAXMI JEWELLERS</div></div>
   </div>
-  </body></html>`);
+  
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">NRJ</div>
+    <h2>New Rajlaxmi Jewellers</h2>
+    <p>Staff Tracker — Please sign in</p>
+    <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button class="login-btn" onclick="doLogin()">🔐 Sign In</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+</body></html>`);
   w.document.close();
   setTimeout(function(){w.focus();},300);
 }
 
-// Wait for Firebase SDKs to be fully ready before init
-function startApp(){
-  if(typeof firebase === 'undefined'){
-    setTimeout(startApp, 80);
-    return;
+
+// ── FIREBASE AUTH ──────────────────────────────────────────
+function doLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  const err=document.getElementById('loginErr');
+  err.textContent='Signing in...';
+  firebase.auth().signInWithEmailAndPassword(email,pass)
+    .then(()=>{err.textContent='';})
+    .catch(e=>{
+      if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')err.textContent='Wrong password. Try again.';
+      else if(e.code==='auth/user-not-found')err.textContent='Email not found.';
+      else if(e.code==='auth/invalid-email')err.textContent='Invalid email address.';
+      else err.textContent='Error: '+e.message;
+    });
+}
+function doLogout(){
+  if(confirm('Sign out?'))firebase.auth().signOut();
+}
+function initAuth(){
+  if(typeof firebase==='undefined'){setTimeout(initAuth,80);return;}
+  // Init Firebase app first if not already done
+  const fbCfg=getFBConfig()||FB_DEFAULT;
+  if(!firebase.apps.length){
+    firebase.initializeApp({
+      apiKey:fbCfg.apiKey,
+      authDomain:fbCfg.projectId+'.firebaseapp.com',
+      databaseURL:fbCfg.databaseURL,
+      projectId:fbCfg.projectId
+    });
   }
+  firebase.auth().onAuthStateChanged(user=>{
+    const screen=document.getElementById('loginScreen');
+    const logoutBtn=document.getElementById('logoutBtn');
+    if(user){
+      // Logged in — hide login screen, show app
+      if(screen)screen.style.display='none';
+      if(logoutBtn)logoutBtn.style.display='inline-block';
+      // Now init database
+      startApp();
+    } else {
+      // Not logged in — show login screen
+      if(screen)screen.style.display='flex';
+      if(logoutBtn)logoutBtn.style.display='none';
+    }
+  });
+}
+// ── END AUTH ───────────────────────────────────────────────
+
+// startApp called after auth confirms user is logged in
+function startApp(){
+  if(typeof firebase==='undefined'){setTimeout(startApp,80);return;}
   init();
 }
+// Boot via auth
 if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded', startApp);
+  document.addEventListener('DOMContentLoaded',initAuth);
 } else {
-  startApp();
+  initAuth();
 }
 </script>
 </body>
