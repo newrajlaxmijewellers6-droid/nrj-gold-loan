@@ -170,6 +170,19 @@ table.stbl tr.snet td{background:linear-gradient(135deg,var(--burg),var(--burg2)
 </style>
 </head>
 <body>
+<!-- LOGIN SCREEN - shown immediately, hidden after auth -->
+<div id="loginScreen" style="position:fixed;inset:0;background:linear-gradient(135deg,#3d0e1a,#6b1a2a);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px">
+  <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.4);text-align:center">
+    <div style="width:56px;height:56px;background:linear-gradient(135deg,#d4a827,#b8860b);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#fff;margin:0 auto 14px;font-family:serif">NRJ</div>
+    <h2 style="font-size:20px;font-weight:700;color:#3d0e1a;margin-bottom:4px;font-family:serif">New Rajlaxmi Jewellers</h2>
+    <p style="font-size:12px;color:#888;margin-bottom:20px">Staff Tracker — Please sign in</p>
+    <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email" style="width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box">
+    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()" style="width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;margin-bottom:10px;outline:none;box-sizing:border-box">
+    <button onclick="doLogin()" style="width:100%;padding:12px;background:linear-gradient(135deg,#d4a827,#b8860b);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">🔐 Sign In</button>
+    <div id="loginErr" style="color:#b01c1c;font-size:12px;margin-top:8px;min-height:18px"></div>
+  </div>
+</div>
+<div id="mainApp" style="display:none">
 
 <div class="topbar">
   <div class="tb-left">
@@ -1368,19 +1381,7 @@ function printAttReport(){
     <div style="text-align:center;min-width:160px"><div style="border-top:1px solid #aaa;padding-top:5px;margin-top:32px">Manager / Owner — NEW RAJLAXMI JEWELLERS</div></div>
   </div>
   
-<!-- LOGIN SCREEN -->
-<div id="loginScreen">
-  <div class="login-box">
-    <div class="login-logo">NRJ</div>
-    <h2>New Rajlaxmi Jewellers</h2>
-    <p>Staff Tracker — Please sign in</p>
-    <input type="email" id="loginEmail" placeholder="Email address" autocomplete="email">
-    <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
-    <button class="login-btn" onclick="doLogin()">🔐 Sign In</button>
-    <div class="login-err" id="loginErr"></div>
-  </div>
 </div>
-
 </body></html>`);
   w.document.close();
   setTimeout(function(){w.focus();},300);
@@ -1419,17 +1420,20 @@ function initAuth(){
       projectId:fbCfg.projectId
     });
   }
-  // Show login screen immediately while checking auth
-  const screen=document.getElementById('loginScreen');
-  if(screen)screen.style.display='flex';
   firebase.auth().onAuthStateChanged(user=>{
+    const screen=document.getElementById('loginScreen');
+    const mainApp=document.getElementById('mainApp');
     const logoutBtn=document.getElementById('logoutBtn');
     if(user){
+      // Logged in — hide login, show app
       if(screen)screen.style.display='none';
+      if(mainApp)mainApp.style.display='block';
       if(logoutBtn)logoutBtn.style.display='inline-block';
-      init(); // Start app only after login confirmed
+      init();
     } else {
+      // Not logged in — show login, hide app
       if(screen)screen.style.display='flex';
+      if(mainApp)mainApp.style.display='none';
       if(logoutBtn)logoutBtn.style.display='none';
     }
   });
