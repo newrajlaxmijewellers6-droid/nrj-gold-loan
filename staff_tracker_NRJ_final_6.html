@@ -1147,7 +1147,18 @@ function makePDF(ym,s){
   doc.setDrawColor(180,180,180);doc.setLineWidth(0.4);doc.line(M,y+18,M+55,y+18);doc.line(W/2-25,y+18,W/2+25,y+18);doc.line(W-M-55,y+18,W-M,y+18);
   doc.setFontSize(7.5);doc.setFont('helvetica','normal');doc.setTextColor(120,120,120);doc.text('Employee Signature',M,y+22);doc.text(s.name||'',M,y+26);doc.text('Cash / Accounts',W/2,y+22,{align:'center'});doc.text('Authorised Signatory',W-M,y+22,{align:'right'});doc.text(CO.name,W-M,y+26,{align:'right'});
   doc.setFillColor(61,14,26);doc.rect(0,282,W,15,'F');doc.setFontSize(7);doc.setFont('helvetica','normal');doc.setTextColor(150,150,150);doc.text(CO.name+' | '+CO.addr+' | Ph: '+CO.phone,W/2,288,{align:'center'});doc.text('Computer-generated salary slip. '+new Date().toLocaleDateString('en-IN'),W/2,293,{align:'center'});
-  doc.save('SalarySlip_'+(s.name||'staff').replace(/\s+/g,'_')+'_'+ym+'.pdf');
+  // Use blob download — works on GitHub Pages and all browsers
+  try{
+    const pdfBlob=doc.output('blob');
+    const url=URL.createObjectURL(pdfBlob);
+    const a=document.createElement('a');
+    a.href=url;a.download='SalarySlip_'+(s.name||'staff').replace(/\s+/g,'_')+'_'+ym+'.pdf';
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+  }catch(e){
+    // Fallback
+    doc.save('SalarySlip_'+(s.name||'staff').replace(/\s+/g,'_')+'_'+ym+'.pdf');
+  }
 }
 
 // CONFIG
