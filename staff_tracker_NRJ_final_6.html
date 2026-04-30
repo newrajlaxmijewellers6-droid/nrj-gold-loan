@@ -1,7 +1,11 @@
 <!DOCTYPE html>
+<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - Built: 1777579357 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -450,8 +454,8 @@ function saveFBConfig(cfg){localStorage.setItem(FB_KEY,JSON.stringify(cfg));}
 
 function initFirebase(cfg){
   try{
-    // Don't re-init if already initialized by auth
-    if(!firebase.apps.find(a=>a.name==='[DEFAULT]')){
+    // Use existing default app (initialized by auth) or create new one
+    if(!firebase.apps.length){
       firebase.initializeApp({
         apiKey:cfg.apiKey,
         authDomain:cfg.projectId+'.firebaseapp.com',
@@ -534,6 +538,7 @@ function disconnectCloud(){
 // ── END FIREBASE ─────────────────────────────────────────────────────
 
 function init(){
+  // Load from localStorage first for instant display
   const raw=localStorage.getItem('nrj5');
   if(raw){try{
     const p=JSON.parse(raw);S=Object.assign({},S,p);
@@ -541,17 +546,10 @@ function init(){
     S.staff=(S.staff||[]).map(s=>Object.assign({shiftIn:'',shiftOut:'',contractHrs:'8'},s));
     Object.keys(S.timing||{}).forEach(ym=>Object.keys(S.timing[ym]).forEach(sid=>Object.keys(S.timing[ym][sid]).forEach(d=>{const t=S.timing[ym][sid][d];if(!('lunchOut' in t)){t.lunchOut='';t.lunchIn=''}})));
   }catch(e){console.warn(e);}}
-  // Try cloud — use saved config or fall back to hardcoded credentials
-  const fbCfg=getFBConfig()||FB_DEFAULT;
-  if(fbCfg){initFirebase(fbCfg);saveFBConfig(fbCfg);}else{showSyncBadge('local');}
   buildMonthSel();renderAll();
-  if(new Date().getDate()===1){
-    const b=document.getElementById('slipDay1');if(b)b.style.display='flex';
-    if(S.staff.length>0)setTimeout(()=>{
-      const n=new Date(),lym=new Date(n.getFullYear(),n.getMonth()-1,1).toISOString().slice(0,7);
-      if(confirm('Today is the 1st!\nAuto-download salary slip PDFs for '+ML(lym)+'?'))S.staff.forEach(s=>makePDF(lym,s));
-    },800);
-  }
+  // Connect to Firebase (app already initialized by auth)
+  const fbCfg=getFBConfig()||FB_DEFAULT;
+  initFirebase(fbCfg);
   setInterval(()=>{const e=document.getElementById('liveclock');if(e){const n=new Date();e.textContent=n.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}},1000);
   const ua=navigator.userAgent,isIOS=/iPhone|iPad|iPod/i.test(ua),isSaf=/Safari/i.test(ua)&&!/Chrome|CriOS|FxiOS/i.test(ua),isSta=window.navigator.standalone===true||window.matchMedia('(display-mode:standalone)').matches;
   if(isSta)hideInstallUI();else if(isIOS&&isSaf)setTimeout(()=>{document.getElementById('iosBanner').style.display='block';},2000);
@@ -1294,7 +1292,8 @@ function printAttReport(){
     dayCounts+='<td style="border:1px solid #e0d0c0;padding:2px 1px;text-align:center;font-size:9px;font-weight:600;color:#3d0e1a;background:#fdf5e8">'+(cnt||'')+'</td>';
   }
 
-  w.document.write(`<!DOCTYPE html><html><head>
+  w.document.write(`<!DOCTYPE html>
+<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - Built: 1777579357 --><html><head>
   <meta charset="UTF-8">
   <title>Attendance Report — ${ml}</title>
   <style>
@@ -1393,6 +1392,7 @@ function doLogin(){
   const email=document.getElementById('loginEmail').value.trim();
   const pass=document.getElementById('loginPass').value;
   const err=document.getElementById('loginErr');
+  if(!email||!pass){err.textContent='Please enter email and password.';return;}
   err.textContent='Signing in...';
   firebase.auth().signInWithEmailAndPassword(email,pass)
     .then(()=>{err.textContent='';})
@@ -1400,16 +1400,17 @@ function doLogin(){
       if(e.code==='auth/wrong-password'||e.code==='auth/invalid-credential')err.textContent='Wrong password. Try again.';
       else if(e.code==='auth/user-not-found')err.textContent='Email not found.';
       else if(e.code==='auth/invalid-email')err.textContent='Invalid email address.';
-      else err.textContent='Error: '+e.message;
+      else err.textContent='Login error: '+e.code;
     });
 }
 function doLogout(){
-  if(confirm('Sign out?'))firebase.auth().signOut();
+  if(confirm('Sign out?'))firebase.auth().signOut().then(()=>location.reload());
 }
 function initAuth(){
-  if(typeof firebase==='undefined'){setTimeout(initAuth,80);return;}
-  // Init Firebase app first if not already done
+  if(typeof firebase==='undefined'){setTimeout(initAuth,100);return;}
   const fbCfg=getFBConfig()||FB_DEFAULT;
+  saveFBConfig(fbCfg);
+  // Initialize Firebase app once
   if(!firebase.apps.length){
     firebase.initializeApp({
       apiKey:fbCfg.apiKey,
@@ -1418,17 +1419,16 @@ function initAuth(){
       projectId:fbCfg.projectId
     });
   }
+  // Show login screen immediately while checking auth
+  const screen=document.getElementById('loginScreen');
+  if(screen)screen.style.display='flex';
   firebase.auth().onAuthStateChanged(user=>{
-    const screen=document.getElementById('loginScreen');
     const logoutBtn=document.getElementById('logoutBtn');
     if(user){
-      // Logged in — hide login screen, show app
       if(screen)screen.style.display='none';
       if(logoutBtn)logoutBtn.style.display='inline-block';
-      // Now init database
-      startApp();
+      init(); // Start app only after login confirmed
     } else {
-      // Not logged in — show login screen
       if(screen)screen.style.display='flex';
       if(logoutBtn)logoutBtn.style.display='none';
     }
