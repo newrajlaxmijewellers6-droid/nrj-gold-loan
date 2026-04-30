@@ -1018,9 +1018,18 @@ function calcSlip(ym,s){
   const otPay=Math.round(ratePerHr*otH);
   const wLabel=wH.toFixed(1)+'h reg + '+otH.toFixed(1)+'h OT / '+mCH+'h ('+paidDays+'d × '+cH+'h)';
 
-  const sales=totSales(ym,s.id),inc=calcInc(sales),bon=totBon(ym,s.id)+otPay,ded=totDed(ym,s.id);
-  const gross=sal+inc+bon,net=Math.max(0,gross-ded);
-  return{base,sal,inc,sales,bon,ded,gross,net,att,wLabel,hasTim,mondayCount,otPay,otH,lunchDedH,ratePerHr};
+  const sales=totSales(ym,s.id),inc=calcInc(sales),bon=totBon(ym,s.id),ded=totDed(ym,s.id);
+  // gross = basic salary + overtime + incentive + bonus
+  const gross=Math.round(sal+otPay+inc+bon),net=Math.max(0,gross-ded);
+  // Safety: replace any NaN with 0
+  const safe=v=>isNaN(v)||!isFinite(v)?0:v;
+  return{
+    base:safe(base),sal:safe(sal),inc:safe(inc),sales:safe(sales),
+    bon:safe(bon),ded:safe(ded),gross:safe(gross),net:safe(net),
+    att,wLabel,hasTim,mondayCount,
+    otPay:safe(otPay),otH:safe(otH),lunchDedH:safe(lunchDedH),
+    ratePerHr:safe(ratePerHr)
+  };
 }
 
 // SALARY REPORT
@@ -1084,7 +1093,7 @@ function buildSlipCard(ym,s){
       '<tr><td>Basic Salary Earned</td><td>₹'+d.sal.toLocaleString('en-IN')+'</td></tr>'+
       (d.otPay>0?'<tr><td style="color:var(--grn)">Overtime ('+d.otH.toFixed(1)+'h × ₹'+Math.round(d.ratePerHr)+'/h)</td><td style="color:var(--grn)">+₹'+d.otPay.toLocaleString('en-IN')+'</td></tr>':'')+
       '<tr><td>Sales Incentive</td><td>₹'+d.inc.toLocaleString('en-IN')+'</td></tr>'+
-      (d.bon>d.otPay?'<tr><td style="color:var(--grn)">Bonus</td><td style="color:var(--grn)">+₹'+(d.bon-d.otPay).toLocaleString('en-IN')+'</td></tr>':'')+
+      (d.bon>0?'<tr><td style="color:var(--grn)">Bonus</td><td style="color:var(--grn)">+₹'+d.bon.toLocaleString('en-IN')+'</td></tr>':'')+
       '<tr class="sgross"><td>Gross Pay</td><td>₹'+d.gross.toLocaleString('en-IN')+'</td></tr>'+
       al.filter(a=>a.type!=='bonus').map(a=>'<tr><td style="color:var(--red)">'+(TL[a.type]||a.type)+': '+(a.note||'')+'('+a.date+')</td><td style="color:var(--red)">−₹'+parseFloat(a.amt).toLocaleString('en-IN')+'</td></tr>').join('')+
       (d.ded>0?'<tr><td style="color:var(--red);font-weight:600">Total Deductions</td><td style="color:var(--red)">−₹'+d.ded.toLocaleString('en-IN')+'</td></tr>':'')+
@@ -1121,7 +1130,12 @@ function makePDF(ym,s){
   info.forEach(([l,v],i)=>{const cx=i%2===0?M+3:W/2+3;if(i%2===0&&i>0)y+=9;doc.setFontSize(6.5);doc.setFont('helvetica','normal');doc.setTextColor(150,150,150);doc.text(l.toUpperCase(),cx,y);doc.setFontSize(8.5);doc.setFont('helvetica','bold');doc.setTextColor(42,26,14);doc.text(String(v),cx,y+4);});
   y+=13;
   doc.setFillColor(26,26,26);doc.rect(M,y,W-2*M,8,'F');doc.setFontSize(8);doc.setFont('helvetica','bold');doc.setTextColor(255,255,255);doc.text('DESCRIPTION',M+4,y+5.5);doc.text('AMOUNT (Rs.)',W-M-4,y+5.5,{align:'right'});y+=10;
-  const rows=[{desc:'Basic Salary Earned',amt:'Rs.'+d.sal.toLocaleString('en-IN'),bold:false,col:[42,26,14]},{desc:'Sales Incentive',amt:'Rs.'+d.inc.toLocaleString('en-IN'),bold:false,col:[42,26,14]},...(d.bon>0?[{desc:'Bonus',amt:'+Rs.'+d.bon.toLocaleString('en-IN'),bold:false,col:[26,107,58]}]:[]),{desc:'GROSS PAY',amt:'Rs.'+d.gross.toLocaleString('en-IN'),bold:true,col:[42,26,14]},...al.filter(a=>a.type!=='bonus').map(a=>({desc:(TL[a.type]||a.type)+(a.note?' – '+a.note:'')+' ('+a.date+')',amt:'− Rs.'+parseFloat(a.amt).toLocaleString('en-IN'),bold:false,col:[176,28,28]})),...(d.ded>0?[{desc:'TOTAL DEDUCTIONS',amt:'− Rs.'+d.ded.toLocaleString('en-IN'),bold:true,col:[176,28,28]}]:[])];
+  const rows=[
+    {desc:'Basic Salary Earned',amt:'Rs.'+d.sal.toLocaleString('en-IN'),bold:false,col:[42,26,14]},
+    ...(d.otPay>0?[{desc:'Overtime ('+d.otH.toFixed(1)+'h x Rs.'+Math.round(d.ratePerHr)+'/h)',amt:'+Rs.'+d.otPay.toLocaleString('en-IN'),bold:false,col:[26,107,58]}]:[]),
+    {desc:'Sales Incentive',amt:'Rs.'+d.inc.toLocaleString('en-IN'),bold:false,col:[42,26,14]},
+    ...(d.bon>0?[{desc:'Bonus',amt:'+Rs.'+d.bon.toLocaleString('en-IN'),bold:false,col:[26,107,58]}]:[]),
+    {desc:'GROSS PAY',amt:'Rs.'+d.gross.toLocaleString('en-IN'),bold:true,col:[42,26,14]},...al.filter(a=>a.type!=='bonus').map(a=>({desc:(TL[a.type]||a.type)+(a.note?' – '+a.note:'')+' ('+a.date+')',amt:'− Rs.'+parseFloat(a.amt).toLocaleString('en-IN'),bold:false,col:[176,28,28]})),...(d.ded>0?[{desc:'TOTAL DEDUCTIONS',amt:'− Rs.'+d.ded.toLocaleString('en-IN'),bold:true,col:[176,28,28]}]:[])];
   rows.forEach(({desc,amt,bold,col},ri)=>{const rh=8;if(bold){doc.setFillColor(242,239,233);doc.rect(M,y,W-2*M,rh,'F');}else if(ri%2===0){doc.setFillColor(252,251,249);doc.rect(M,y,W-2*M,rh,'F');}doc.setFontSize(bold?8.5:8);doc.setFont('helvetica',bold?'bold':'normal');doc.setTextColor(...col);doc.text(desc,M+4,y+5.5);doc.text(amt,W-M-4,y+5.5,{align:'right'});doc.setDrawColor(232,213,184);doc.setLineWidth(0.2);doc.line(M,y+rh,W-M,y+rh);y+=rh;});
   y+=5;
   doc.setFillColor(253,246,227);doc.roundedRect(M,y,W-2*M,20,3,3,'F');doc.setDrawColor(212,168,39);doc.setLineWidth(0.8);doc.roundedRect(M,y,W-2*M,20,3,3,'S');
