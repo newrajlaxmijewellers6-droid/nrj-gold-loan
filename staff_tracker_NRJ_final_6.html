@@ -1080,10 +1080,12 @@ function calcSlip(ym,s){
     // Lunch fully paid — no deduction at all
     const netMins=rawMins;
     const contractMins=cH*60;
-    // OT = mins beyond contract
-    otH+=Math.max(0,netMins-contractMins)/60;
-    // Pay for this day = actual hours at hourly rate
-    totalRegPay+=ratePerHr*(netMins/60);
+    // Regular = up to contract hours; OT = beyond contract hours
+    const regMins=Math.min(netMins,contractMins);
+    const dayOTmins=Math.max(0,netMins-contractMins);
+    otH+=dayOTmins/60;
+    // Regular pay only (OT paid separately)
+    totalRegPay+=ratePerHr*(regMins/60);
   }
 
   // Add Monday WO pay
