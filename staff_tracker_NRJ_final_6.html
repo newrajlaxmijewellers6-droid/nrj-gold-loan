@@ -850,43 +850,20 @@ function punch(ym,sid,d,f){
 }
 function t2m(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*60+m;}
 function calcHrs(ym,sid,d){
+  // Lunch is fully paid — no deduction at all
   const t=gTim(ym,sid,d),inM=t2m(t.in),outM=t2m(t.out);if(inM===null||outM===null)return null;
   let w=outM-inM;if(w<0)w+=1440;
-  // Lunch handling: 1 hour is always FREE
-  // If lunch punched, calculate actual lunch duration
-  // Extra beyond 1hr is deducted; if less than 1hr, still only 1hr free (no credit)
-  if(t.lunchOut){
-    const lo=t2m(t.lunchOut),li=t2m(t.lunchIn);
-    if(lo!==null&&li!==null){
-      let lunchTaken=li-lo;if(lunchTaken<0)lunchTaken+=1440;
-      // Deduct actual lunch — minimum 60 min (1hr always free, extra also deducted)
-      w=Math.max(0,w-Math.max(60,lunchTaken));
-    } else {
-      // Only lunchOut punched, no lunchIn — deduct 1hr free
-      w=Math.max(0,w-60);
-    }
-  }
   return Math.round(w/60*100)/100;
 }
-// Returns {reg, ot, lunchExtra} breakdown for a day
+// Returns {reg, ot} breakdown for a day — lunch fully paid, no deduction
 function calcHrsDetail(ym,sid,d){
   const t=gTim(ym,sid,d),inM=t2m(t.in),outM=t2m(t.out);if(inM===null||outM===null)return null;
   const sf=S.staff.find(x=>x.id===sid),cH=parseFloat(sf&&sf.contractHrs)||8;
   let raw=outM-inM;if(raw<0)raw+=1440;
-  let lunchFree=0,lunchExtra=0;
-  if(t.lunchOut){
-    const lo=t2m(t.lunchOut),li=t2m(t.lunchIn);
-    if(lo!==null&&li!==null){
-      let lunchTaken=li-lo;if(lunchTaken<0)lunchTaken+=1440;
-      lunchFree=60;
-      lunchExtra=Math.max(0,lunchTaken-60);
-    } else {lunchFree=60;}
-  }
-  const netMins=Math.max(0,raw-lunchFree-lunchExtra);
   const contractMins=cH*60;
-  const reg=Math.min(netMins,contractMins);
-  const ot=Math.max(0,netMins-contractMins);
-  return{reg:Math.round(reg/60*100)/100, ot:Math.round(ot/60*100)/100, lunchExtra:Math.round(lunchExtra/60*100)/100, net:Math.round(netMins/60*100)/100};
+  const reg=Math.min(raw,contractMins);
+  const ot=Math.max(0,raw-contractMins);
+  return{reg:Math.round(reg/60*100)/100, ot:Math.round(ot/60*100)/100, lunchExtra:0, net:Math.round(raw/60*100)/100};
 }
 function totHrs(ym,sid){let t=0;for(let d=1;d<=DIM(ym);d++){const h=calcHrs(ym,sid,d);if(h!==null)t+=h;}return Math.round(t*100)/100;}
 function updTimTot(ym,sid){
@@ -1052,7 +1029,7 @@ function calcSlip(ym,s){
   const paidDays=daysInMonth-sundayCount;
   const mCH=paidDays*cH; // total payable hours in month
 
-  // Total hours actually worked (net of 1hr free lunch, extra lunch deducted)
+  // Total hours actually worked (lunch fully paid — no deduction)
   let wH=0,otH=0,lunchDedH=0;
   for(let d=1;d<=daysInMonth;d++){
     const det=calcHrsDetail(ym,s.id,d);
