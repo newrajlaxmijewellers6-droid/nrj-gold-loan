@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - Built: 1777579357 -->
+<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - FINAL -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1349,7 +1349,7 @@ function printAttReport(){
   });
 
   w.document.write(`<!DOCTYPE html>
-<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - Built: 1777579357 --><html><head>
+<!-- NRJ Staff Tracker v6.5 - Auth+Cloud - FINAL --><html><head>
   <meta charset="UTF-8">
   <title>Attendance Report — ${ml}</title>
   <style>
@@ -1469,6 +1469,21 @@ function doLogout(){
   if(confirm('Sign out?'))firebase.auth().signOut().then(()=>location.reload());
 }
 function initAuth(){
+  // Show warning if opened from local file
+  if(location.protocol==='file:'||location.protocol==='content:'){
+    const screen=document.getElementById('loginScreen');
+    if(screen){
+      screen.style.display='flex';
+      screen.innerHTML='<div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4)">'+
+        '<div style="font-size:40px;margin-bottom:12px">⚠️</div>'+
+        '<h2 style="color:#3d0e1a;margin-bottom:8px;font-size:20px">Please open from the web</h2>'+
+        '<p style="color:#666;font-size:13px;margin-bottom:20px">This app must be opened from GitHub Pages to connect to your data.</p>'+
+        '<a href="https://newrajlaxmijewellers6-droid.github.io/nrj-gold-loan/staff_tracker_NRJ_final_6.html" style="display:block;background:linear-gradient(135deg,#d4a827,#b8860b);color:#fff;padding:14px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:700;margin-bottom:12px">👉 Open Correct Link</a>'+
+        '<p style="color:#aaa;font-size:11px">Bookmark that link for easy access next time</p>'+
+        '</div>';
+    }
+    return;
+  }
   if(typeof firebase==='undefined'){setTimeout(initAuth,100);return;}
   const fbCfg=getFBConfig()||FB_DEFAULT;
   saveFBConfig(fbCfg);
