@@ -1304,6 +1304,32 @@ function printAttReport(){
     let cnt=0;S.staff.forEach(s=>{const v=gAtt(ym,s.id,d);if(v==='P'||v==='H')cnt++;});
     dayCounts+='<td style="border:1px solid #e0d0c0;padding:2px 1px;text-align:center;font-size:9px;font-weight:600;color:#3d0e1a;background:#fdf5e8">'+(cnt||'')+'</td>';
   }
+  // Timing rows
+  let timingRows='';
+  S.staff.forEach(s=>{
+    let tcells='',totalHrs=0;
+    for(let d=1;d<=days;d++){
+      const t=gTim(ym,s.id,d),dw=DOW(ym,d),att=gAtt(ym,s.id,d);
+      let cellContent='',bg='#fff';
+      if(dw==='Sun'){bg='#f5f2ee';cellContent='<span style="color:#ccc;font-size:7px">—</span>';}
+      else if(att==='WO'){bg='#e8eef8';cellContent='<span style="color:#1a3d7a;font-size:7px;font-weight:700">WO</span>';}
+      else if(t&&t.in&&t.out){
+        bg='#f0fdf4';
+        const hrs=calcHrs(ym,s.id,d)||0;
+        totalHrs+=hrs;
+        cellContent='<span style="color:#166534;font-size:7px;font-weight:700;display:block;line-height:1.3">'+t.in+'</span>'+
+                    '<span style="color:#555;font-size:7px;display:block;line-height:1.3">'+t.out+'</span>'+
+                    '<span style="color:#b8860b;font-size:7px;font-weight:700;display:block;line-height:1.3">'+hrs+'h</span>';
+      } else if(att==='A'){bg='#fdecea';cellContent='<span style="color:#b01c1c;font-size:8px;font-weight:700">A</span>';}
+      else{cellContent='<span style="color:#e0e0e0;font-size:8px">—</span>';}
+      tcells+='<td style="background:'+bg+';border:1px solid #e0d0c0;padding:2px 1px;text-align:center;vertical-align:middle;line-height:1.2">'+cellContent+'</td>';
+    }
+    timingRows+='<tr>'+
+      '<td style="border:1px solid #e0d0c0;padding:5px 8px;font-weight:600;font-size:10px;background:#fffdf7;white-space:nowrap;text-align:left">'+s.name+'<br><span style="font-size:8px;color:#999;font-weight:400">'+s.role+'</span></td>'+
+      tcells+
+      '<td style="border:1px solid #e0d0c0;padding:3px 6px;text-align:center;font-weight:700;font-size:11px;color:#b8860b;background:#fdfaf0">'+totalHrs.toFixed(1)+'h</td>'+
+      '</tr>';
+  });
 
   w.document.write(`<!DOCTYPE html>
 <!-- NRJ Staff Tracker v6.5 - Auth+Cloud - Built: 1777579357 --><html><head>
@@ -1374,6 +1400,24 @@ function printAttReport(){
       </tr>
     </tfoot>
   </table>
+  <!-- Timing Section -->
+  <div style="margin-top:20px;page-break-before:always">
+    <div style="background:linear-gradient(135deg,#1a3d7a,#0f2550);color:#fff;padding:8px 14px;border-radius:5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;font-weight:700;letter-spacing:.04em">DAILY TIMING REPORT</div>
+      <div style="font-size:11px;color:#aac4f0">${ml} &nbsp;|&nbsp; In / Out / Hours</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px">
+      <thead>
+        <tr style="background:#1a3d7a">
+          <th style="color:#f5e6c8;padding:5px 8px;font-size:10px;text-align:left;border:1px solid #2a4d8a;min-width:130px">Staff</th>
+          ${dayHdrs}
+          <th style="color:#f5e6c8;padding:5px 6px;font-size:10px;text-align:center;border:1px solid #2a4d8a;min-width:50px">Total</th>
+        </tr>
+      </thead>
+      <tbody>${timingRows}</tbody>
+    </table>
+  </div>
+
   <!-- Signatures -->
   <div style="display:flex;justify-content:space-between;margin-top:44px;padding-top:8px;font-size:10px;color:#888;border-top:1px solid #ddd">
     <div style="text-align:center;min-width:160px"><div style="border-top:1px solid #aaa;padding-top:5px;margin-top:32px">Employee Representative</div></div>
