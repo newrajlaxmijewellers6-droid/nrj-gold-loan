@@ -588,8 +588,11 @@ function buildMonthSel(){
   // Restore previously selected month if it exists in the list
   if(prevCM&&[...sel.options].some(o=>o.value===prevCM)){
     sel.value=prevCM;
+  } else {
+    // Default to current month
+    sel.value=new Date().toISOString().slice(0,7);
   }
-  CM=sel.value;
+  CM=sel.value; // Always sync CM from selector
 }
 function onMonthChange(){CM=document.getElementById('monthSel').value;renderAttendance();renderTiming();renderSales();renderAdvances();renderSalary();renderSlips();}
 function ML(ym){const[y,m]=ym.split('-');return new Date(y,m-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});}
@@ -742,6 +745,7 @@ function renderAttSelf(){
 }
 
 function renderAttendance(){
+  CM=document.getElementById('monthSel').value||CM;
   const ym=CM;document.getElementById('att-lbl').textContent=ML(ym);
   // Staff selector
   const sb=document.getElementById('attStaffBtns');
@@ -939,6 +943,7 @@ function renderTimSelf(){
   document.getElementById('timSelfArea').style.display='block';
 }
 function renderTiming(){
+  CM=document.getElementById('monthSel').value||CM;
   const ym=CM;document.getElementById('timing-lbl').textContent=ML(ym);
   const btns=document.getElementById('timStaffBtns');btns.innerHTML='';
   S.staff.forEach(s=>{const btn=document.createElement('button');btn.className='btn btn-sm '+(timActiveSid===s.id?'btn-gold':'btn-ol2');btn.textContent=s.name||'?';btn.addEventListener('click',()=>{timActiveSid=s.id;renderTiming();renderTimSelf();});btns.appendChild(btn);});
