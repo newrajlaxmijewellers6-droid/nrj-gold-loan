@@ -1016,51 +1016,79 @@ function calcSlip(ym,s){
   const base=parseFloat(s.base)||0,cH=parseFloat(s.contractHrs)||8;
   const daysInMonth=DIM(ym);
 
-  // Count Mondays (paid WO) and Sundays in this month
-  let mondayCount=0,sundayCount=0;
+  // Count Mondays in this month (paid WO days)
+  let mondayCount=0;
   for(let d=1;d<=daysInMonth;d++){
-    const dw=DOW(ym,d);
-    if(dw==='Mon')mondayCount++;
-    if(dw==='Sun')sundayCount++;
+    if(DOW(ym,d)==='Mon') mondayCount++;
   }
-  // Paid days = all days in month (Mondays are paid WO, Sundays unpaid)
-  // Full month contract hours = (daysInMonth - Sundays) × cH
-  // Mondays included as paid even if WO
-  const paidDays=daysInMonth-sundayCount;
-  const mCH=paidDays*cH; // total payable hours in month
 
-  // Total hours actually worked (lunch fully paid — no deduction)
-  let wH=0,otH=0,lunchDedH=0;
+  const att=attStats(ym,s.id);
+
+  // If staff has no attendance at all — salary = 0
+  if(att.p===0&&att.h===0){
+    const safe=v=>isNaN(v)||!isFinite(v)?0:v;
+    const ded=totDed(ym,s.id);
+    return{base,sal:0,inc:0,sales:0,bon:0,ded:safe(ded),gross:0,net:0,att,
+      wLabel:'No attendance',hasTim:false,mondayCount:0,otPay:0,otH:0,lunchDedH:0,ratePerHr:0};
+  }
+
+  // ── DAY-BASED SALARY CALCULATION ──────────────────────────
+  // Formula: Base ÷ 30 days × days paid
+  // Days paid = P (full) + H×0.5 (half)
+  // Monday WO paid ONLY if staff worked at least 1 day in that week
+  // Working days = total days minus Sundays (Sundays are unpaid off)
+  let sundayCount=0;
+  for(let d=1;d<=daysInMonth;d++){if(DOW(ym,d)==='Sun')sundayCount++;}
+  const totalDays=daysInMonth-sundayCount; // e.g. April = 30-4 = 26 working days
+  const ratePerDay=base/totalDays;
+
+  // Count paid Monday WOs — only weeks where staff worked at least 1 day
+  let paidMondayWO=0;
+  for(let d=1;d<=daysInMonth;d++){
+    if(DOW(ym,d)!=='Mon') continue;
+    const att_d=gAtt(ym,s.id,d);
+    if(att_d!=='WO') continue;
+    // Check if staff worked any day this week (Mon-Sun)
+    let workedThisWeek=false;
+    for(let wd=d+1;wd<=Math.min(d+6,daysInMonth);wd++){
+      const v=gAtt(ym,s.id,wd);
+      if(v==='P'||v==='H'){workedThisWeek=true;break;}
+    }
+    // Also check previous week days if Monday is not day 1
+    if(!workedThisWeek&&d>1){
+      for(let wd=Math.max(1,d-6);wd<d;wd++){
+        const v=gAtt(ym,s.id,wd);
+        if(v==='P'||v==='H'){workedThisWeek=true;break;}
+      }
+    }
+    if(workedThisWeek) paidMondayWO++;
+  }
+
+  const paidDays=att.p + (att.h*0.5) + paidMondayWO;
+  const sal=Math.round(ratePerDay*paidDays);
+
+  // Overtime: extra hours beyond contract — paid at hourly rate
+  let otH=0;
+  const ratePerHr=base/(totalDays*cH);
   for(let d=1;d<=daysInMonth;d++){
     const det=calcHrsDetail(ym,s.id,d);
-    if(det){wH+=det.reg;otH+=det.ot;lunchDedH+=det.lunchExtra;}
-    // Monday WO: add full contract day hours as paid even if not punched
-    else{
-      const dw=DOW(ym,d),att=gAtt(ym,s.id,d);
-      if(dw==='Mon'&&att==='WO')wH+=cH;
-    }
+    if(det&&det.ot>0) otH+=det.ot;
   }
-  wH=Math.round(wH*100)/100;
   otH=Math.round(otH*100)/100;
-
-  const att=attStats(ym,s.id),hasTim=wH>0;
-  // Salary: base pay proportional to hours, plus overtime at same rate
-  const ratePerHr=mCH>0?base/mCH:0;
-  const sal=Math.round(ratePerHr*wH);
   const otPay=Math.round(ratePerHr*otH);
-  const wLabel=wH.toFixed(1)+'h reg + '+otH.toFixed(1)+'h OT / '+mCH+'h ('+paidDays+'d × '+cH+'h)';
+
+  const wLabel=att.p+'P + '+att.h+'H×0.5 + '+paidMondayWO+' Mon WO = '+paidDays.toFixed(1)+' / '+totalDays+' working days (excl '+sundayCount+' Sun)';
+  const hasTim=totHrs(ym,s.id)>0;
 
   const sales=totSales(ym,s.id),inc=calcInc(sales),bon=totBon(ym,s.id),ded=totDed(ym,s.id);
-  // gross = basic salary + overtime + incentive + bonus
   const gross=Math.round(sal+otPay+inc+bon),net=Math.max(0,gross-ded);
-  // Safety: replace any NaN with 0
   const safe=v=>isNaN(v)||!isFinite(v)?0:v;
   return{
     base:safe(base),sal:safe(sal),inc:safe(inc),sales:safe(sales),
     bon:safe(bon),ded:safe(ded),gross:safe(gross),net:safe(net),
     att,wLabel,hasTim,mondayCount,
-    otPay:safe(otPay),otH:safe(otH),lunchDedH:safe(lunchDedH),
-    ratePerHr:safe(ratePerHr)
+    otPay:safe(otPay),otH:safe(otH),lunchDedH:0,ratePerHr:safe(ratePerHr),
+    ratePerDay:safe(ratePerDay),paidDays:safe(paidDays),totalDays
   };
 }
 
