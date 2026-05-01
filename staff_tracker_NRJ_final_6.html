@@ -1021,72 +1021,100 @@ function renderAdvances(){
 // SALARY CALC
 function attStats(ym,sid){let p=0,a=0,h=0,wo=0;for(let d=1;d<=DIM(ym);d++){const v=gAtt(ym,sid,d);if(v==='P')p++;else if(v==='A')a++;else if(v==='H')h++;else if(v==='WO')wo++;}return{p,a,h,wo};}
 function calcSlip(ym,s){
-  // SALARY FORMULA:
-  // Rate/hr = Base / (30 x contractHrs)
-  // Each day: pay MIN(actual hours, contractHrs) — so full day if on time or late
-  // If staff works LESS than contract = proportional pay
-  // OT = hours BEYOND contract = paid extra at same rate
-  // Monday WO = full contract day paid
-  // NO lunch deduction
-  const base=parseFloat(s.base)||0,cH=parseFloat(s.contractHrs)||8;
-  const daysInMonth=DIM(ym);
-  const safe=v=>(!isFinite(v)||isNaN(v))?0:v;
-  const ratePerHr=base/(30*cH);
-  const ratePerDay=base/30;
+  /*
+  ════════════════════════════════════════
+  SALARY RULES — NRJ JEWELLERS
+  ════════════════════════════════════════
+  Rate/hr  = Base ÷ (30 × contractHrs)
+  Each day = actual hours punched × rate
+  Monday   = full contract hours paid (WO)
+  OT       = hours beyond contract × rate
+  No lunch deduction
+  No timing = Rs.0 for that day
+  Zero attendance = Rs.0 salary
+  ════════════════════════════════════════
+  */
+  const base=parseFloat(s.base)||0;
+  const cH=parseFloat(s.contractHrs)||8;
+  const dIM=DIM(ym);
+  const safe=v=>(!isFinite(v)||isNaN(v))?0:Math.round(v*100)/100;
 
+  // Hourly rate
+  const rph=base/(30*cH);
+
+  // Check if any attendance exists
   const att=attStats(ym,s.id);
   if(att.p===0&&att.h===0){
-    return{base,sal:0,inc:0,sales:0,bon:0,ded:safe(totDed(ym,s.id)),
-      gross:0,net:0,att,wLabel:'No attendance',hasTim:false,
-      otPay:0,otH:0,lunchDedH:0,lunchDed:0,ratePerHr:0,ratePerDay,totalDays:30,
-      mondayCount:0,paidMondayWO:0};
+    return{base,sal:0,inc:0,sales:0,bon:0,
+      ded:safe(totDed(ym,s.id)),gross:0,net:0,
+      att,wLabel:'No attendance',hasTim:false,
+      otPay:0,otH:0,lunchDedH:0,lunchDed:0,
+      ratePerHr:safe(rph),ratePerDay:safe(base/30),
+      totalDays:30,mondayCount:0,paidMondayWO:0};
   }
 
-  // Paid Monday WOs — only if staff worked that week
-  let mondayCount=0,paidMondayWO=0;
-  for(let d=1;d<=daysInMonth;d++){
-    if(DOW(ym,d)!=='Mon') continue;
-    mondayCount++;
-    if(gAtt(ym,s.id,d)!=='WO') continue;
-    let worked=false;
-    for(let w=d+1;w<=Math.min(d+6,daysInMonth)&&!worked;w++){const v=gAtt(ym,s.id,w);if(v==='P'||v==='H')worked=true;}
-    if(!worked){for(let w=Math.max(1,d-6);w<d&&!worked;w++){const v=gAtt(ym,s.id,w);if(v==='P'||v==='H')worked=true;}}
-    if(worked) paidMondayWO++;
-  }
+  let regPay=0, otH=0, workedDays=0, mondayWOdays=0;
 
-  // Day by day calculation
-  let regPay=0,otH=0;
-  for(let d=1;d<=daysInMonth;d++){
-    const dw=DOW(ym,d),att_d=gAtt(ym,s.id,d);
-    // Monday WO = full contract day paid
-    if(dw==='Mon'&&att_d==='WO'){regPay+=ratePerDay;continue;}
+  for(let d=1;d<=dIM;d++){
+    const dow=DOW(ym,d);
+    const attD=gAtt(ym,s.id,d);
     const t=gTim(ym,s.id,d);
-    const inM=t2m(t.in),outM=t2m(t.out);
-    if(inM===null||outM===null) continue;
-    let mins=outM-inM; if(mins<0)mins+=1440;
-    const contractMins=cH*60;
-    if(mins>=contractMins){
-      // Worked full shift or more — pay full day + OT for extra
-      regPay+=ratePerDay;
-      otH+=Math.max(0,mins-contractMins)/60;
-    } else {
-      // Worked less than contract — pay proportional (actual hours)
-      regPay+=ratePerHr*(mins/60);
+    const inM=t2m(t.in), outM=t2m(t.out);
+
+    // MONDAY WO — pay full contract hours, no punch needed
+    if(dow==='Mon'&&attD==='WO'){
+      regPay+=rph*cH;
+      mondayWOdays++;
+      continue;
     }
+
+    // No punch = no pay for this day
+    if(inM===null||outM===null) continue;
+
+    // Calculate actual minutes worked
+    let mins=outM-inM;
+    if(mins<0) mins+=1440;
+
+    workedDays++;
+    const contractMins=cH*60;
+
+    // Regular pay = up to contract hours
+    const regMins=Math.min(mins,contractMins);
+    regPay+=rph*(regMins/60);
+
+    // OT = beyond contract hours
+    const otMins=Math.max(0,mins-contractMins);
+    otH+=otMins/60;
   }
 
   otH=Math.round(otH*100)/100;
   const sal=Math.round(regPay);
-  const otPay=Math.round(ratePerHr*otH);
+  const otPay=Math.round(rph*otH);
+
+  const wLabel=
+    workedDays+'days+'+mondayWOdays+'WO | '+
+    'OT:'+otH.toFixed(1)+'h | '+
+    '₹'+Math.round(rph)+'/h';
+
+  const sales=totSales(ym,s.id);
+  const inc=calcInc(sales);
+  const bon=totBon(ym,s.id);
+  const ded=totDed(ym,s.id);
+  const gross=Math.round(sal+otPay+inc+bon);
+  const net=Math.max(0,gross-ded);
   const hasTim=totHrs(ym,s.id)>0;
-  const wLabel=att.p+'P+'+att.h+'H+'+paidMondayWO+'WO OT:'+otH.toFixed(1)+'h @₹'+Math.round(ratePerHr)+'/h';
-  const sales=totSales(ym,s.id),inc=calcInc(sales),bon=totBon(ym,s.id),ded=totDed(ym,s.id);
-  const gross=Math.round(sal+otPay+inc+bon),net=Math.max(0,gross-ded);
-  return{base:safe(base),sal:safe(sal),inc:safe(inc),sales:safe(sales),
-    bon:safe(bon),ded:safe(ded),gross:safe(gross),net:safe(net),
-    att,wLabel,hasTim,mondayCount,paidMondayWO,
-    otPay:safe(otPay),otH:safe(otH),lunchDedH:0,lunchDed:0,
-    ratePerHr:safe(ratePerHr),ratePerDay:safe(ratePerDay),totalDays:30};
+
+  return{
+    base:safe(base), sal:safe(sal), inc:safe(inc),
+    sales:safe(sales), bon:safe(bon), ded:safe(ded),
+    gross:safe(gross), net:safe(net),
+    att, wLabel, hasTim,
+    mondayCount:mondayWOdays, paidMondayWO:mondayWOdays,
+    otPay:safe(otPay), otH:safe(otH),
+    lunchDedH:0, lunchDed:0,
+    ratePerHr:safe(rph), ratePerDay:safe(base/30),
+    totalDays:30
+  };
 }
 
 // SALARY REPORT
