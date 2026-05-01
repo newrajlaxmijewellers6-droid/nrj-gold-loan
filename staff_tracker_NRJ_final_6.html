@@ -1021,10 +1021,13 @@ function renderAdvances(){
 // SALARY CALC
 function attStats(ym,sid){let p=0,a=0,h=0,wo=0;for(let d=1;d<=DIM(ym);d++){const v=gAtt(ym,sid,d);if(v==='P')p++;else if(v==='A')a++;else if(v==='H')h++;else if(v==='WO')wo++;}return{p,a,h,wo};}
 function calcSlip(ym,s){
-  // SALARY: Rate/hr = Base/(30×contractHrs)
-  // Each day: pay actual hours (in→out), NO lunch deduction
-  // OT = hours beyond contract, paid same rate
+  // SALARY FORMULA:
+  // Rate/hr = Base / (30 x contractHrs)
+  // Each day: pay MIN(actual hours, contractHrs) — so full day if on time or late
+  // If staff works LESS than contract = proportional pay
+  // OT = hours BEYOND contract = paid extra at same rate
   // Monday WO = full contract day paid
+  // NO lunch deduction
   const base=parseFloat(s.base)||0,cH=parseFloat(s.contractHrs)||8;
   const daysInMonth=DIM(ym);
   const safe=v=>(!isFinite(v)||isNaN(v))?0:v;
@@ -1039,7 +1042,7 @@ function calcSlip(ym,s){
       mondayCount:0,paidMondayWO:0};
   }
 
-  // Paid Monday WOs — only weeks staff worked
+  // Paid Monday WOs — only if staff worked that week
   let mondayCount=0,paidMondayWO=0;
   for(let d=1;d<=daysInMonth;d++){
     if(DOW(ym,d)!=='Mon') continue;
@@ -1051,19 +1054,25 @@ function calcSlip(ym,s){
     if(worked) paidMondayWO++;
   }
 
-  // Calculate day by day
+  // Day by day calculation
   let regPay=0,otH=0;
   for(let d=1;d<=daysInMonth;d++){
     const dw=DOW(ym,d),att_d=gAtt(ym,s.id,d);
-    if(dw==='Mon'&&att_d==='WO'){regPay+=ratePerHr*cH;continue;} // Mon WO = full day
+    // Monday WO = full contract day paid
+    if(dw==='Mon'&&att_d==='WO'){regPay+=ratePerDay;continue;}
     const t=gTim(ym,s.id,d);
     const inM=t2m(t.in),outM=t2m(t.out);
     if(inM===null||outM===null) continue;
     let mins=outM-inM; if(mins<0)mins+=1440;
-    // NO lunch deduction
     const contractMins=cH*60;
-    regPay+=ratePerHr*(Math.min(mins,contractMins)/60); // regular
-    otH+=Math.max(0,mins-contractMins)/60; // OT
+    if(mins>=contractMins){
+      // Worked full shift or more — pay full day + OT for extra
+      regPay+=ratePerDay;
+      otH+=Math.max(0,mins-contractMins)/60;
+    } else {
+      // Worked less than contract — pay proportional (actual hours)
+      regPay+=ratePerHr*(mins/60);
+    }
   }
 
   otH=Math.round(otH*100)/100;
