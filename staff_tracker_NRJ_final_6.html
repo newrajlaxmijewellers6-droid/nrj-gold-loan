@@ -776,8 +776,8 @@ function renderAttendance(){
       td.style.cssText='padding:2px;'+(dw==='Sun'?'background:#faf5ec;':'')+(isT?'background:#e8eef8;':'');
       const btn=document.createElement('button');
       btn.className='abtn'+(cur?' '+cur:'');
-      btn.textContent=cur||(dw==='Sun'?'—':'');
-      if(!isT&&!adminOn)btn.style.opacity=cur?'1':'0.25';
+      btn.textContent=cur||'';
+      if(!isT&&!adminOn)btn.style.opacity=cur?'1':'0.3';
       (function(ym2,sid2,dd){btn.addEventListener('click',function(){cycleAtt(ym2,sid2,dd);});})(ym,s.id,d);
       td.appendChild(btn);row.appendChild(td);
       if(cur==='P')p++;else if(cur==='A')a++;else if(cur==='H')hh++;else if(cur==='WO')wo++;
@@ -1280,7 +1280,7 @@ function printAttReport(){
     for(let d=1;d<=days;d++){
       const v=gAtt(ym,s.id,d),dw=DOW(ym,d),isT=TODAY()===(ym+'-'+String(d).padStart(2,'0'));
       const bg=v?BG[v]:(dw==='Sun'?'#f5f2ee':'#fff');
-      const col=v?TC[v]:'#ccc';
+      const col=v?TC[v]:(dw==='Sun'?'#ddd':'#ccc');
       cells+='<td style="background:'+bg+';color:'+col+';font-weight:'+(v?'700':'400')+';border:1px solid #e0d0c0;padding:3px 1px;text-align:center;font-size:10px;'+(isT?'outline:2px solid #1a3d7a;outline-offset:-2px;position:relative':'')+'">'+( v||'')+'</td>';
       if(v==='P')p++;else if(v==='A')a++;else if(v==='H')h++;else if(v==='WO')wo++;
     }
@@ -1311,7 +1311,8 @@ function printAttReport(){
     for(let d=1;d<=days;d++){
       const t=gTim(ym,s.id,d),dw=DOW(ym,d),att=gAtt(ym,s.id,d);
       let cellContent='',bg='#fff';
-      if(dw==='Sun'){bg='#f5f2ee';cellContent='<span style="color:#ccc;font-size:7px">—</span>';}
+      if(dw==='Sun'&&(!t||(!t.in&&!t.out))&&!att){bg='#f5f2ee';cellContent='<span style="color:#ccc;font-size:7px">—</span>';}
+      else if(dw==='Sun'&&t&&t.in&&t.out){bg='#fff9e6';} // Sunday with timing — fall through to normal
       else if(att==='WO'){bg='#e8eef8';cellContent='<span style="color:#1a3d7a;font-size:7px;font-weight:700">WO</span>';}
       else if(t&&t.in&&t.out){
         bg='#f0fdf4';
