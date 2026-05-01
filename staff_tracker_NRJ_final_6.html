@@ -852,16 +852,7 @@ function t2m(t){if(!t)return null;const[h,m]=t.split(':').map(Number);return h*6
 function calcHrs(ym,sid,d){
   const t=gTim(ym,sid,d),inM=t2m(t.in),outM=t2m(t.out);if(inM===null||outM===null)return null;
   let w=outM-inM;if(w<0)w+=1440;
-  // 1hr lunch = FREE. Extra lunch beyond 1hr = deducted
-  if(t&&t.lunchOut){
-    const lo=t2m(t.lunchOut),li=t2m(t.lunchIn);
-    if(lo!==null&&li!==null){
-      let lunchTaken=li-lo;if(lunchTaken<0)lunchTaken+=1440;
-      w=Math.max(0,w-Math.max(60,lunchTaken)); // deduct 1hr min, or actual if more
-    } else {
-      w=Math.max(0,w-60); // only lunchOut punched — deduct 1hr free
-    }
-  }
+  // Lunch fully paid — no deduction
   return Math.round(w/60*100)/100;
 }
 // Returns {reg, ot, lunchExtra} breakdown for a day
@@ -870,17 +861,8 @@ function calcHrsDetail(ym,sid,d){
   const t=gTim(ym,sid,d),inM=t2m(t.in),outM=t2m(t.out);if(inM===null||outM===null)return null;
   const sf=S.staff.find(x=>x.id===sid),cH=parseFloat(sf&&sf.contractHrs)||8;
   let raw=outM-inM;if(raw<0)raw+=1440;
-  let lunchExtra=0;
-  if(t&&t.lunchOut){
-    const lo=t2m(t.lunchOut),li=t2m(t.lunchIn);
-    if(lo!==null&&li!==null){
-      let lunchTaken=li-lo;if(lunchTaken<0)lunchTaken+=1440;
-      lunchExtra=Math.max(0,lunchTaken-60); // extra beyond 1hr free
-      raw=Math.max(0,raw-Math.max(60,lunchTaken));
-    } else {
-      raw=Math.max(0,raw-60);
-    }
-  }
+  // Lunch fully paid — no deduction
+  const lunchExtra=0;
   const contractMins=cH*60;
   const reg=Math.min(raw,contractMins);
   const ot=Math.max(0,raw-contractMins);
@@ -1095,9 +1077,8 @@ function calcSlip(ym,s){
         extraLunchMins=Math.max(0,lt-60);
       }
     }
-    lunchDedH+=extraLunchMins/60;
-    // Net working minutes (extra lunch deducted, 1hr free lunch is NOT deducted)
-    const netMins=Math.max(0,rawMins-extraLunchMins);
+    // Lunch fully paid — no deduction at all
+    const netMins=rawMins;
     const contractMins=cH*60;
     // OT = mins beyond contract
     otH+=Math.max(0,netMins-contractMins)/60;
