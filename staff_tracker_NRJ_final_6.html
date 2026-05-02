@@ -360,8 +360,11 @@ table.stbl tr.snet td{background:linear-gradient(135deg,var(--burg),var(--burg2)
 <!-- SALARY SLIPS -->
 <div class="sec" id="sec-slips">
   <div class="card">
-    <div class="ctitle">Salary Slips — <span id="slip-lbl"></span>
-      <button class="btn btn-gold btn-sm" onclick="genAllPDFs()">⬇ All PDFs</button>
+    <div class="ctitle">Salary Slips
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
+        <select id="slipMonthSel" onchange="renderSlips()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--ink);font-family:inherit"></select>
+        <button class="btn btn-gold btn-sm" onclick="genAllPDFs()">⬇ Download All PDFs</button>
+      </div>
     </div>
     <div id="slipDay1" style="display:none" class="ib grn"><b>Today is the 1st!</b>&nbsp; Salary slips auto-generated for last month.</div>
     <div id="slipNav" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px"></div>
@@ -556,7 +559,7 @@ function init(){
   if(raw){try{
     const p=JSON.parse(raw);S=Object.assign({},S,p);
     if(!S.advances)S.advances={};if(!S.slipPayments)S.slipPayments={};if(!S.timing)S.timing={};
-    S.staff=(S.staff||[]).map(s=>Object.assign({shiftIn:'',shiftOut:'',contractHrs:'8'},s));
+    S.staff=(S.staff||[]).map(s=>Object.assign({shiftIn:'',shiftOut:'',contractHrs:'8',joinDate:'',leaveDate:'',status:'active'},s));
     Object.keys(S.timing||{}).forEach(ym=>Object.keys(S.timing[ym]).forEach(sid=>Object.keys(S.timing[ym][sid]).forEach(d=>{const t=S.timing[ym][sid][d];if(!('lunchOut' in t)){t.lunchOut='';t.lunchIn=''}})));
   }catch(e){console.warn(e);}}
   buildMonthSel();renderAll();
@@ -621,7 +624,7 @@ function toggleAdmin(){
 function changePin(){requireAdmin(()=>{const p=document.getElementById('newPinInp').value.trim();if(!p||p.length<4){alert('PIN must be at least 4 digits.');return;}S.adminPin=p;save();document.getElementById('newPinInp').value='';alert('Admin PIN updated!');});}
 
 // STAFF
-function addStaff(){S.staff.push({id:'S'+(S.staffSeq++),name:'',base:'',role:'',shiftIn:'',shiftOut:'',contractHrs:'8'});save();renderSetup();}
+function addStaff(){S.staff.push({id:'S'+(S.staffSeq++),name:'',base:'',role:'',shiftIn:'',shiftOut:'',contractHrs:'8',joinDate:'',leaveDate:'',status:'active'});save();renderSetup();}
 function renderSetup(){
   const g=document.getElementById('staffGrid');
   const ids=new Set(S.staff.map(s=>s.id));
@@ -645,6 +648,22 @@ function renderSetup(){
       document.getElementById('ssi-'+s.id).value=s.shiftIn||'';
       document.getElementById('sso-'+s.id).value=s.shiftOut||'';
       document.getElementById('sch-'+s.id).value=s.contractHrs||'8';
+      document.getElementById('sjd-'+s.id).value=s.joinDate||'';
+      document.getElementById('sst-'+s.id).value=s.status||'active';
+      document.getElementById('sld-'+s.id).value=s.leaveDate||'';
+      // Show/hide leaving date based on status
+      const slv=document.getElementById('slv-'+s.id);
+      if(slv)slv.style.display=(s.status&&s.status!=='active')?'block':'none';
+      // Show status badge on card
+      const scHd=c.querySelector('.sc-hd');
+      if(scHd){
+        let badge=scHd.querySelector('.status-badge');
+        if(!badge){badge=document.createElement('span');badge.className='status-badge';scHd.appendChild(badge);}
+        badge.style.cssText='font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:4px';
+        if(s.status==='left'){badge.textContent='Left';badge.style.background='#fdecea';badge.style.color='#b01c1c';}
+        else if(s.status==='terminated'){badge.textContent='Terminated';badge.style.background='#1a0a05';badge.style.color='#ff6b6b';}
+        else{badge.textContent='Active';badge.style.background='#e8f5ee';badge.style.color='#1a6b3a';}
+      }
     }
     const av=document.getElementById('av-'+s.id);if(av)av.textContent=s.name?s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?';
   });
@@ -653,6 +672,11 @@ function updS(id,f,v){
   const s=S.staff.find(x=>x.id===id);if(!s)return;
   s[f]=v;save();
   if(f==='name'){const av=document.getElementById('av-'+id);if(av)av.textContent=v?v.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?';}
+  if(f==='status'){
+    const slv=document.getElementById('slv-'+id);
+    if(slv)slv.style.display=(v&&v!=='active')?'block':'none';
+    renderAttendance();renderSalary();
+  }
   if(f==='shiftIn'||f==='shiftOut'){
     const si=s.shiftIn,so=s.shiftOut;
     if(si&&so){
@@ -1044,6 +1068,14 @@ function calcSlip(ym,s){
 
   // Check if any attendance exists
   const att=attStats(ym,s.id);
+  // Check if staff was active in this month
+  const ymStart=ym+'-01';
+  const ymEnd=ym+'-'+String(dIM).padStart(2,'0');
+  if(s.joinDate&&s.joinDate>ymEnd){
+    return{base,sal:0,inc:0,sales:0,bon:0,ded:0,gross:0,net:0,att,
+      wLabel:'Not joined yet',hasTim:false,otPay:0,otH:0,lunchDedH:0,lunchDed:0,
+      ratePerHr:safe(rph),ratePerDay:safe(base/30),totalDays:30,mondayCount:0,paidMondayWO:0};
+  }
   if(att.p===0&&att.h===0){
     return{base,sal:0,inc:0,sales:0,bon:0,
       ded:safe(totDed(ym,s.id)),gross:0,net:0,
@@ -1145,7 +1177,24 @@ function renderSalary(){
 
 // SALARY SLIPS
 function renderSlips(){
-  const ym=CM;document.getElementById('slip-lbl').textContent=ML(ym);
+  // Build slip month selector with all available months
+  const slipSel=document.getElementById('slipMonthSel');
+  if(slipSel){
+    const prev=slipSel.value||CM;
+    slipSel.innerHTML='';
+    const now=new Date();
+    for(let i=-11;i<=1;i++){
+      const d=new Date(now.getFullYear(),now.getMonth()+i,1);
+      const v=d.toISOString().slice(0,7);
+      const o=document.createElement('option');
+      o.value=v;
+      o.textContent=d.toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+      if(v===prev)o.selected=true;
+      slipSel.appendChild(o);
+    }
+    if(!slipSel.value)slipSel.value=CM;
+  }
+  const ym=(slipSel&&slipSel.value)||CM;document.getElementById('slip-lbl').textContent=ML(ym);
   const nav=document.getElementById('slipNav'),area=document.getElementById('slipArea');
   if(!S.staff.length){nav.innerHTML='';area.innerHTML='<p style="padding:20px;color:var(--ink3)">Add staff first.</p>';return;}
   nav.innerHTML='<button class="btn btn-gold btn-sm" onclick="genAllPDFs()">⬇ All PDFs</button> '+
@@ -1192,8 +1241,21 @@ function togglePaid(ym,sid){
   if(!cur.paid){S.slipPayments[key]={paid:true,paidDate:new Date().toLocaleDateString('en-IN')};save();renderSlips();renderSalary();}
   else requireAdmin(()=>{S.slipPayments[key]={paid:false,paidDate:''};save();renderSlips();renderSalary();});
 }
-function genPDF(sid,ym){const s=S.staff.find(x=>x.id===sid);if(s)makePDF(ym,s);}
-function genAllPDFs(){if(!S.staff.length){alert('No staff added.');return;}S.staff.forEach(s=>makePDF(CM,s));}
+function genPDF(sid,ym){
+  const s=S.staff.find(x=>x.id===sid);
+  if(!s)return;
+  const sel=document.getElementById('slipMonthSel');
+  const month=ym||(sel&&sel.value)||CM;
+  makePDF(month,s);
+}
+function genAllPDFs(){
+  if(!S.staff.length){alert('No staff added.');return;}
+  const sel=document.getElementById('slipMonthSel');
+  const ym=(sel&&sel.value)||CM;
+  const ml=new Date(ym+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+  if(!confirm('Download salary slips for ALL staff for '+ml+'?'))return;
+  S.staff.forEach(s=>makePDF(ym,s));
+}
 function makePDF(ym,s){
   const d=calcSlip(ym,s),key=ym+'-'+s.id,pi=S.slipPayments[key]||{};
   const al=gAdv(ym).filter(a=>a.sid===s.id),ml=ML(ym);
