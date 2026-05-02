@@ -491,6 +491,10 @@ function initFirebase(cfg){
         // Ensure staff is always array (Firebase can convert arrays to objects)
         if(merged.staff&&!Array.isArray(merged.staff))
           merged.staff=Object.keys(merged.staff).sort((a,b)=>Number(a)-Number(b)).map(k=>merged.staff[k]);
+        // Ensure each staff has all required fields including new ones
+        merged.staff=(merged.staff||[]).map(s=>Object.assign(
+          {shiftIn:'',shiftOut:'',contractHrs:'8',joinDate:'',leaveDate:'',status:'active'},s
+        ));
         S=merged;
         localStorage.setItem('nrj5',JSON.stringify(S));
         renderAll(true); // skip month rebuild to preserve selected month
@@ -658,6 +662,9 @@ function renderSetup(){
       const sjd=document.getElementById('sjd-'+s.id);if(sjd)sjd.value=s.joinDate||'';
       const sst=document.getElementById('sst-'+s.id);if(sst)sst.value=s.status||'active';
       const sld=document.getElementById('sld-'+s.id);if(sld)sld.value=s.leaveDate||'';
+      // Show leaving date if status is not active
+      const slv2=document.getElementById('slv-'+s.id);
+      if(slv2)slv2.style.display=(s.status&&s.status!=='active')?'block':'none';
       // Show/hide leaving date based on status
       const slv=document.getElementById('slv-'+s.id);
       if(slv)slv.style.display=(s.status&&s.status!=='active')?'block':'none';
