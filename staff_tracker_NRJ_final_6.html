@@ -360,7 +360,7 @@ table.stbl tr.snet td{background:linear-gradient(135deg,var(--burg),var(--burg2)
 <!-- SALARY SLIPS -->
 <div class="sec" id="sec-slips">
   <div class="card">
-    <div class="ctitle">Salary Slips
+    <div class="ctitle">Salary Slips — <span id="slip-lbl"></span>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px">
         <select id="slipMonthSel" onchange="renderSlips()" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;background:var(--bg);color:var(--ink);font-family:inherit"></select>
         <button class="btn btn-gold btn-sm" onclick="genAllPDFs()">⬇ Download All PDFs</button>
@@ -640,7 +640,14 @@ function renderSetup(){
         '<label>Monthly Base Salary (₹)</label><input type="number" id="sb-'+s.id+'" oninput="updS(\''+s.id+'\',\'base\',this.value)" placeholder="e.g. 15000">'+
         '<label>Shift Start</label><input type="time" id="ssi-'+s.id+'" oninput="updS(\''+s.id+'\',\'shiftIn\',this.value)">'+
         '<label>Shift End</label><input type="time" id="sso-'+s.id+'" oninput="updS(\''+s.id+'\',\'shiftOut\',this.value)">'+
-        '<label>Daily Contract Hours</label><input type="number" id="sch-'+s.id+'" step="0.5" min="1" max="24" oninput="updS(\''+s.id+'\',\'contractHrs\',this.value)" placeholder="8">';
+        '<label>Daily Contract Hours</label><input type="number" id="sch-'+s.id+'" step="0.5" min="1" max="24" oninput="updS(\'"+s.id+"\',\'contractHrs\',this.value)" placeholder="8">'+
+        '<label>Joining Date</label><input type="date" id="sjd-'+s.id+'" oninput="updS(\'"+s.id+"\',\'joinDate\',this.value)">'+
+        '<label>Status</label><select id="sst-'+s.id+'" onchange="updS(\'"+s.id+"\',\'status\',this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--bg)">'+
+        '<option value="active">✅ Active</option>'+
+        '<option value="left">🚪 Left / Resigned</option>'+
+        '<option value="terminated">❌ Terminated</option>'+
+        '</select>'+
+        '<div id="slv-'+s.id+'" style="display:none"><label>Last Working Date</label><input type="date" id="sld-'+s.id+'" oninput="updS(\'"+s.id+"\',\'leaveDate\',this.value)"></div>';
       g.appendChild(c);
       document.getElementById('sn-'+s.id).value=s.name||'';
       document.getElementById('sr-'+s.id).value=s.role||'';
@@ -648,9 +655,9 @@ function renderSetup(){
       document.getElementById('ssi-'+s.id).value=s.shiftIn||'';
       document.getElementById('sso-'+s.id).value=s.shiftOut||'';
       document.getElementById('sch-'+s.id).value=s.contractHrs||'8';
-      document.getElementById('sjd-'+s.id).value=s.joinDate||'';
-      document.getElementById('sst-'+s.id).value=s.status||'active';
-      document.getElementById('sld-'+s.id).value=s.leaveDate||'';
+      const sjd=document.getElementById('sjd-'+s.id);if(sjd)sjd.value=s.joinDate||'';
+      const sst=document.getElementById('sst-'+s.id);if(sst)sst.value=s.status||'active';
+      const sld=document.getElementById('sld-'+s.id);if(sld)sld.value=s.leaveDate||'';
       // Show/hide leaving date based on status
       const slv=document.getElementById('slv-'+s.id);
       if(slv)slv.style.display=(s.status&&s.status!=='active')?'block':'none';
@@ -1192,7 +1199,10 @@ function renderSlips(){
       if(v===prev)o.selected=true;
       slipSel.appendChild(o);
     }
-    if(!slipSel.value)slipSel.value=CM;
+    // Default to current month
+    if(!slipSel.value||![...slipSel.options].some(o=>o.value===slipSel.value)){
+      slipSel.value=CM;
+    }
   }
   const ym=(slipSel&&slipSel.value)||CM;document.getElementById('slip-lbl').textContent=ML(ym);
   const nav=document.getElementById('slipNav'),area=document.getElementById('slipArea');
