@@ -484,6 +484,9 @@ function initFirebase(cfg){
     showSyncBadge('connecting');
     fbRef.on('value',snap=>{
       const d=snap.val();
+      // Skip Firebase update if we recently saved locally (prevents overwrite race)
+      if(Date.now()<_ignoreFbUntil){showSyncBadge('live');return;}
+      if(Date.now()-_lastSaveTime<3000){showSyncBadge('live');return;}
       if(d){
         // Merge carefully — preserve defaults for missing keys
         const merged=Object.assign({staff:[],attendance:{},timing:{},sales:{},advances:{},slipPayments:{},
@@ -505,17 +508,19 @@ function initFirebase(cfg){
   }catch(e){console.warn('Firebase init failed',e);showSyncBadge('error');}
 }
 
+let _lastSaveTime=0,_ignoreFbUntil=0;
 function save(){
   localStorage.setItem('nrj5',JSON.stringify(S));
+  _ignoreFbUntil=Date.now()+4000;
   if(fbRef){
     clearTimeout(_saveTimer);
     _saveTimer=setTimeout(()=>{
       showSyncBadge('saving');
-      fbRef.set(S).then(()=>showSyncBadge('live')).catch(e=>{console.warn(e);showSyncBadge('error');});
+      _lastSaveTime=Date.now();
+      fbRef.set(JSON.parse(JSON.stringify(S))).then(()=>{showSyncBadge('live');_ignoreFbUntil=0;}).catch(e=>{console.warn(e);showSyncBadge('error');});
     },600);
   }
 }
-
 function showSyncBadge(state){
   const b=document.getElementById('syncBadge');if(!b)return;
   const states={
@@ -633,55 +638,66 @@ function renderSetup(){
   const g=document.getElementById('staffGrid');
   const ids=new Set(S.staff.map(s=>s.id));
   g.querySelectorAll('.sc').forEach(el=>{if(!ids.has(el.dataset.sid))el.remove();});
-  S.staff.forEach((s,i)=>{
-    let c=g.querySelector('.sc[data-sid="'+s.id+'"]');
-    if(!c){
-      c=document.createElement('div');c.className='sc';c.dataset.sid=s.id;
-      c.innerHTML='<div class="sc-hd"><div class="av" id="av-'+s.id+'">?</div><span style="font-size:11px;color:var(--ink3)">#'+(i+1)+'</span></div>'+
-        '<button class="delbtn" onclick="delStaff(\''+s.id+'\')">×</button>'+
-        '<label>Full Name</label><input type="text" id="sn-'+s.id+'" oninput="updS(\''+s.id+'\',\'name\',this.value)" placeholder="e.g. Rahul Sharma">'+
-        '<label>Role / Designation</label><input type="text" id="sr-'+s.id+'" oninput="updS(\''+s.id+'\',\'role\',this.value)" placeholder="e.g. Sales Executive">'+
-        '<label>Monthly Base Salary (₹)</label><input type="number" id="sb-'+s.id+'" oninput="updS(\''+s.id+'\',\'base\',this.value)" placeholder="e.g. 15000">'+
-        '<label>Shift Start</label><input type="time" id="ssi-'+s.id+'" oninput="updS(\''+s.id+'\',\'shiftIn\',this.value)">'+
-        '<label>Shift End</label><input type="time" id="sso-'+s.id+'" oninput="updS(\''+s.id+'\',\'shiftOut\',this.value)">'+
-        '<label>Daily Contract Hours</label><input type="number" id="sch-'+s.id+'" step="0.5" min="1" max="24" oninput="updS(\'"+s.id+"\',\'contractHrs\',this.value)" placeholder="8">'+
-        '<label>Joining Date</label><input type="date" id="sjd-'+s.id+'" oninput="updS(\'"+s.id+"\',\'joinDate\',this.value)">'+
-        '<label>Status</label><select id="sst-'+s.id+'" onchange="updS(\'"+s.id+"\',\'status\',this.value)" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--bg)">'+
+  S.staff.forEach(function(s,i){
+    let card=g.querySelector('[data-sid="'+s.id+'"]');
+    if(!card){
+      card=document.createElement('div');
+      card.className='sc';
+      card.dataset.sid=s.id;
+      g.appendChild(card);
+    }
+    // Status badge color
+    const statusColor=s.status==='left'?'#b01c1c':s.status==='terminated'?'#666':'#1a6b3a';
+    const statusBg=s.status==='left'?'#fdecea':s.status==='terminated'?'#f0f0f0':'#e8f5ee';
+    const statusLabel=s.status==='left'?'Left':s.status==='terminated'?'Terminated':'Active';
+    const initials=(s.name||'?').split(' ').map(function(w){return w[0];}).join('').slice(0,2).toUpperCase();
+
+    card.innerHTML=
+      '<div class="sc-hd"><div class="av" id="av-'+s.id+'">'+initials+'</div>'+
+      '<span style="font-size:11px;color:var(--ink3)">#'+(i+1)+'</span>'+
+      '<span style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600;background:'+statusBg+';color:'+statusColor+'">'+statusLabel+'</span></div>'+
+      '<button class="delbtn" onclick="delStaff(\''+s.id+'\')">×</button>'+
+      '<label>Full Name</label><input type="text" id="sn-'+s.id+'" placeholder="e.g. Rahul Sharma">'+
+      '<label>Role / Designation</label><input type="text" id="sr-'+s.id+'" placeholder="e.g. Sales Executive">'+
+      '<label>Monthly Base Salary (₹)</label><input type="number" id="sb-'+s.id+'" placeholder="e.g. 15000">'+
+      '<label>Shift Start</label><input type="time" id="ssi-'+s.id+'">'+
+      '<label>Shift End</label><input type="time" id="sso-'+s.id+'">'+
+      '<label>Daily Contract Hours</label><input type="number" id="sch-'+s.id+'" step="0.5" min="1" max="24" placeholder="8">'+
+      '<label>Joining Date</label><input type="date" id="sjd-'+s.id+'">'+
+      '<label>Status</label>'+
+      '<select id="sst-'+s.id+'" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;background:var(--bg)">'+
         '<option value="active">✅ Active</option>'+
         '<option value="left">🚪 Left / Resigned</option>'+
         '<option value="terminated">❌ Terminated</option>'+
-        '</select>'+
-        '<div id="slv-'+s.id+'" style="display:none"><label>Last Working Date</label><input type="date" id="sld-'+s.id+'" oninput="updS(\'"+s.id+"\',\'leaveDate\',this.value)"></div>';
-      g.appendChild(c);
-      document.getElementById('sn-'+s.id).value=s.name||'';
-      document.getElementById('sr-'+s.id).value=s.role||'';
-      document.getElementById('sb-'+s.id).value=s.base||'';
-      document.getElementById('ssi-'+s.id).value=s.shiftIn||'';
-      document.getElementById('sso-'+s.id).value=s.shiftOut||'';
-      document.getElementById('sch-'+s.id).value=s.contractHrs||'8';
-      const sjd=document.getElementById('sjd-'+s.id);if(sjd)sjd.value=s.joinDate||'';
-      const sst=document.getElementById('sst-'+s.id);if(sst)sst.value=s.status||'active';
-      const sld=document.getElementById('sld-'+s.id);if(sld)sld.value=s.leaveDate||'';
-      // Show leaving date if status is not active
-      const slv2=document.getElementById('slv-'+s.id);
-      if(slv2)slv2.style.display=(s.status&&s.status!=='active')?'block':'none';
-      // Show/hide leaving date based on status
-      const slv=document.getElementById('slv-'+s.id);
-      if(slv)slv.style.display=(s.status&&s.status!=='active')?'block':'none';
-      // Show status badge on card
-      const scHd=c.querySelector('.sc-hd');
-      if(scHd){
-        let badge=scHd.querySelector('.status-badge');
-        if(!badge){badge=document.createElement('span');badge.className='status-badge';scHd.appendChild(badge);}
-        badge.style.cssText='font-size:10px;padding:2px 7px;border-radius:10px;font-weight:600;margin-left:4px';
-        if(s.status==='left'){badge.textContent='Left';badge.style.background='#fdecea';badge.style.color='#b01c1c';}
-        else if(s.status==='terminated'){badge.textContent='Terminated';badge.style.background='#1a0a05';badge.style.color='#ff6b6b';}
-        else{badge.textContent='Active';badge.style.background='#e8f5ee';badge.style.color='#1a6b3a';}
-      }
-    }
-    const av=document.getElementById('av-'+s.id);if(av)av.textContent=s.name?s.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase():'?';
+      '</select>'+
+      '<div id="slv-'+s.id+'" style="'+(s.status&&s.status!=='active'?'display:block':'display:none')+'">'+
+        '<label>Last Working Date</label><input type="date" id="sld-'+s.id+'">'+
+      '</div>';
+
+    // Set values
+    document.getElementById('sn-'+s.id).value=s.name||'';
+    document.getElementById('sr-'+s.id).value=s.role||'';
+    document.getElementById('sb-'+s.id).value=s.base||'';
+    document.getElementById('ssi-'+s.id).value=s.shiftIn||'';
+    document.getElementById('sso-'+s.id).value=s.shiftOut||'';
+    document.getElementById('sch-'+s.id).value=s.contractHrs||'8';
+    document.getElementById('sjd-'+s.id).value=s.joinDate||'';
+    document.getElementById('sst-'+s.id).value=s.status||'active';
+    document.getElementById('sld-'+s.id).value=s.leaveDate||'';
+
+    // Add event listeners (avoids inline escape hell)
+    document.getElementById('sn-'+s.id).oninput=function(){updS(s.id,'name',this.value);};
+    document.getElementById('sr-'+s.id).oninput=function(){updS(s.id,'role',this.value);};
+    document.getElementById('sb-'+s.id).oninput=function(){updS(s.id,'base',this.value);};
+    document.getElementById('ssi-'+s.id).oninput=function(){updS(s.id,'shiftIn',this.value);};
+    document.getElementById('sso-'+s.id).oninput=function(){updS(s.id,'shiftOut',this.value);};
+    document.getElementById('sch-'+s.id).oninput=function(){updS(s.id,'contractHrs',this.value);};
+    document.getElementById('sjd-'+s.id).oninput=function(){updS(s.id,'joinDate',this.value);};
+    document.getElementById('sst-'+s.id).onchange=function(){updS(s.id,'status',this.value);};
+    document.getElementById('sld-'+s.id).oninput=function(){updS(s.id,'leaveDate',this.value);};
   });
 }
+
 function updS(id,f,v){
   const s=S.staff.find(x=>x.id===id);if(!s)return;
   s[f]=v;save();
@@ -1207,9 +1223,8 @@ function renderSlips(){
       slipSel.appendChild(o);
     }
     // Default to current month
-    if(!slipSel.value||![...slipSel.options].some(o=>o.value===slipSel.value)){
-      slipSel.value=CM;
-    }
+    const validVals=[...slipSel.options].map(o=>o.value);
+    if(!slipSel.value||!validVals.includes(slipSel.value)){slipSel.value=CM||validVals[0]||'';}
   }
   const ym=(slipSel&&slipSel.value)||CM;document.getElementById('slip-lbl').textContent=ML(ym);
   const nav=document.getElementById('slipNav'),area=document.getElementById('slipArea');
