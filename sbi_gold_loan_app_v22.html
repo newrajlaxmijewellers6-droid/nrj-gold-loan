@@ -2024,13 +2024,13 @@ function aUpdateTotals() {
   if(!count){ bar.style.display='none'; if(card)card.style.display='none'; return; }
   bar.style.display='flex';
   bar.innerHTML=`<span><b>Total G.W.:</b> ${tGW.toFixed(3)} g</span><span><b>Total Net Wt.:</b> ${tNet.toFixed(3)} g</span><span><b>Total Mkt Value:</b> ₹${Math.round(tMV).toLocaleString('en-IN')}/-</span>`;
-  // Auto-show loan calculator and populate gold value
+  // Auto-show loan calculator and always sync gold value unless user manually typed
   if(card){ card.style.display='block'; }
   const goldValEl=document.getElementById('a-loanGoldVal');
-  if(goldValEl && (goldValEl.value==='' || !goldValEl.dataset.manual)){
-    goldValEl.value=Math.round(tMV);
-    aCalcLoanEligibility();
+  if(goldValEl && !goldValEl.dataset.manual){
+    goldValEl.value=Math.round(tMV)||0;
   }
+  aCalcLoanEligibility();
 }
 
 function aRenderTotalRow() {
@@ -2059,7 +2059,18 @@ function aGetItems() {
   return items;
 }
 
-function aClearAll() { if(!confirm('Clear all items?'))return; document.getElementById('a-itemsBody').innerHTML=''; document.getElementById('a-itemsFoot').innerHTML=''; aRowId=0; aUpdateTotals(); }
+function aClearAll() {
+  if(!confirm('Clear all items?'))return;
+  document.getElementById('a-itemsBody').innerHTML='';
+  document.getElementById('a-itemsFoot').innerHTML='';
+  aRowId=0;
+  aUpdateTotals();
+  // Hide loan card when all cleared
+  const card=document.getElementById('a-loanCalcCard');
+  if(card) card.style.display='none';
+  const el=document.getElementById('a-loanGoldVal');
+  if(el){ el.value=''; delete el.dataset.manual; }
+}
 
 // ── GOLD LOAN ELIGIBILITY CALCULATOR ──────────────────────
 function aLoanValFromItems() {
@@ -2073,16 +2084,27 @@ function aLoanValFromItems() {
 }
 
 function aCalcLoanEligibility() {
-  const val = parseFloat(document.getElementById('a-loanGoldVal')?.value) || 0;
+  const el = document.getElementById('a-loanGoldVal');
   const card = document.getElementById('a-loanCalcCard');
   if (!card) return;
 
+  // Get tMV directly from items if input is empty
+  let val = parseFloat(el?.value) || 0;
+  if (!val) {
+    let tMV = 0;
+    document.querySelectorAll('#a-itemsBody tr').forEach(tr => {
+      tMV += aGetMV(tr.id.replace('ar',''));
+    });
+    val = Math.round(tMV);
+    if (el) el.value = val || '';
+  }
+
   if (val <= 0) {
     ['a-loan1yr','a-loan6mo','a-loan3yr'].forEach(id => {
-      const el = document.getElementById(id); if(el) el.textContent = '—';
+      const e = document.getElementById(id); if(e) e.textContent = '—';
     });
     ['a-loan1yr-f','a-loan6mo-f','a-loan3yr-f'].forEach(id => {
-      const el = document.getElementById(id); if(el) el.textContent = '';
+      const e = document.getElementById(id); if(e) e.textContent = '';
     });
     return;
   }
@@ -2090,17 +2112,15 @@ function aCalcLoanEligibility() {
   const fmt = n => 'Rs.' + Math.round(n).toLocaleString('en-IN') + '/-';
   const fmtV = 'Rs.' + Math.round(val).toLocaleString('en-IN');
 
-  const cases = [
-    { ids: ['a-loan1yr','a-loan1yr-f'],   mult: 65,  label: fmtV + ' × 65 / 100' },
-    { ids: ['a-loan6mo','a-loan6mo-f'],   mult: 70,  label: fmtV + ' × 70 / 100' },
-    { ids: ['a-loan3yr','a-loan3yr-f'],   mult: 72,  label: fmtV + ' × 72 / 100' },
-  ];
-
-  cases.forEach(c => {
-    const amt = document.getElementById(c.ids[0]);
-    const formula = document.getElementById(c.ids[1]);
-    if (amt) amt.textContent = fmt(val * c.mult / 100);
-    if (formula) formula.textContent = c.label;
+  [
+    ['a-loan1yr', 'a-loan1yr-f', 65],
+    ['a-loan6mo', 'a-loan6mo-f', 70],
+    ['a-loan3yr', 'a-loan3yr-f', 72],
+  ].forEach(([amtId, fId, mult]) => {
+    const amtEl = document.getElementById(amtId);
+    const fEl   = document.getElementById(fId);
+    if (amtEl) amtEl.textContent = fmt(val * mult / 100);
+    if (fEl)   fEl.textContent   = fmtV + ' × ' + mult + ' / 100';
   });
 }
 
