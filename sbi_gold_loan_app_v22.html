@@ -398,7 +398,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
       </div>
 
       <!-- LOAN ELIGIBILITY CALCULATOR — screen only, not printed -->
-      <div class="card" id="a-loanCalcCard" style="display:none;border:2px solid #1a3a6b">
+      <div class="card" id="a-loanCalcCard" style="display:block;border:2px solid #1a3a6b">
         <div class="card-title" style="color:#1a3a6b;display:flex;justify-content:space-between;align-items:center">
           <span>🏦 Gold Loan Eligibility Calculator</span>
           <span style="font-size:10px;font-weight:400;color:#888;text-transform:none;letter-spacing:0">Screen only — not printed</span>
@@ -2021,7 +2021,7 @@ function aUpdateTotals() {
   document.querySelectorAll('#a-itemsBody tr').forEach(tr=>{ count++; const rid=tr.id.replace('ar',''); tGW+=(parseFloat(document.getElementById('aGw'+rid)?.value)||0); tNet+=(parseFloat(document.getElementById('aNet'+rid)?.value)||0); tMV+=aGetMV(rid); });
   const bar=document.getElementById('a-totalsBar');
   const card=document.getElementById('a-loanCalcCard');
-  if(!count){ bar.style.display='none'; if(card)card.style.display='none'; return; }
+  if(!count){ bar.style.display='none'; return; }
   bar.style.display='flex';
   bar.innerHTML=`<span><b>Total G.W.:</b> ${tGW.toFixed(3)} g</span><span><b>Total Net Wt.:</b> ${tNet.toFixed(3)} g</span><span><b>Total Mkt Value:</b> ₹${Math.round(tMV).toLocaleString('en-IN')}/-</span>`;
   // Auto-show loan calculator and always sync gold value unless user manually typed
@@ -2065,11 +2065,9 @@ function aClearAll() {
   document.getElementById('a-itemsFoot').innerHTML='';
   aRowId=0;
   aUpdateTotals();
-  // Hide loan card when all cleared
-  const card=document.getElementById('a-loanCalcCard');
-  if(card) card.style.display='none';
   const el=document.getElementById('a-loanGoldVal');
   if(el){ el.value=''; delete el.dataset.manual; }
+  aCalcLoanEligibility();
 }
 
 // ── GOLD LOAN ELIGIBILITY CALCULATOR ──────────────────────
