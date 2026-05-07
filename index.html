@@ -1661,10 +1661,8 @@ function renderPayments() {
     return;
   }
   const totalPaid = filtered.reduce((s,p)=>s+(parseFloat(p.amount)||0),0);
-  let html = `<div style="background:#f0fff4;border:1px solid #a0d4b0;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;gap:20px;flex-wrap:wrap;font-size:13px">
-    <span>Entries: <b>${filtered.length}</b></span>
-    <span>Total Collected: <b style="color:#166534">Rs.${Math.round(totalPaid).toLocaleString('en-IN')}/-</b></span>
-  </div>`;
+  // Amount hidden by default — shown via the period summary toggle button
+  let html = '';
   html += filtered.map(p=>{
     const inv = invs.find(i=>i.id===p.invId);
     const custName = inv?.custName||'Unknown';
@@ -2528,13 +2526,36 @@ function closeModal(){
 }
 
 function refreshPanel(panel, btn) {
-  // Spin the button
+  // Spin animation — try both class names for compatibility
   if(btn) {
-    btn.classList.remove('spin-once');
-    void btn.offsetWidth; // force reflow to restart animation
-    btn.classList.add('spin-once');
-    btn.addEventListener('animationend', () => btn.classList.remove('spin-once'), {once:true});
+    btn.classList.remove('spin-once','spinning');
+    void btn.offsetWidth;
+    btn.classList.add('spinning');
+    setTimeout(()=>btn.classList.remove('spinning','spin-once'), 500);
   }
+  // Force re-read from Firebase if online
+  try {
+    if(_loanFbRef) {
+      _loanFbRef.once('value', snap => {
+        const d = snap.val();
+        if(d) {
+          if(d.records)   localStorage.setItem('nrj_records',   JSON.stringify(Object.values(d.records)));
+          if(d.invoices)  localStorage.setItem('nrj_invoices',  JSON.stringify(Object.values(d.invoices)));
+          if(d.payments)  localStorage.setItem('nrj_payments',  JSON.stringify(Object.values(d.payments)));
+          if(d.customers) localStorage.setItem('nrj_customers', JSON.stringify(Object.values(d.customers)));
+        }
+        updateRecordsBadge();
+        updateCustomerBadge();
+        updateInvoiceBadges();
+        if(panel==='records')   renderRecords();
+        if(panel==='customers') renderCustomers();
+        if(panel==='invoices')  renderInvoices();
+        if(panel==='payments')  renderPayments();
+      });
+      return;
+    }
+  } catch(e){ console.warn('Firebase refresh error:',e); }
+  // Fallback: render from localStorage
   updateRecordsBadge();
   updateCustomerBadge();
   updateInvoiceBadges();
