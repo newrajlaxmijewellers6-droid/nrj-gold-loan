@@ -1958,32 +1958,48 @@ function _showCustDropdown(inputId, dropId, prefix) {
 function _fillCustFields(prefix, key) {
   const cust = getCustomers().find(c => c.key === key);
   if (!cust) return;
-  const set = (id, val) => { const el=document.getElementById(id); if(el && val) el.value=val; };
-  set(prefix+'-custName',     cust.name);
-  set(prefix+'-mobile',       cust.mobile);  // works for both a-mobile and b-mobile
-  set(prefix+'-residentOf',   cust.address);
-  set(prefix+'-swdOf',        cust.swdOf);
-  set(prefix+'-custEmail',    cust.email);
-  // Also fill loanAccNo if available for PL-61iii form
-  if(prefix==='b' && cust.visits?.length) {
-    const lastVisit = cust.visits[0];
-    if(lastVisit?.accNo) set('b-loanAccNo', lastVisit.accNo);
+  const set = (id, val) => {
+    const el = document.getElementById(id);
+    if (el && val) el.value = val;
+  };
+
+  // ── Form A (Appraiser Cert PL-61i) ──
+  if (prefix === 'a') {
+    set('a-custName',   cust.name);
+    set('a-mobile',     cust.mobile);
+    set('a-residentOf', cust.address);
+    set('a-swdOf',      cust.swdOf);
+    set('a-custEmail',  cust.email);
+    // Last visit: fill accNo and branch
+    const v = cust.visits?.[0];
+    if (v?.accNo)  set('a-accNo',  v.accNo);
+    if (v?.branch) set('a-branch', v.branch);
+    // Borrower short name
+    const bEl = document.getElementById('a-borrowerName');
+    if (bEl && !bEl.value && cust.name) {
+      const p = cust.name.trim().split(/\s+/);
+      bEl.value = p.length > 1 ? p[0][0] + '. ' + p[p.length-1] : cust.name;
+    }
+    // swdType — click matching button
+    if (cust.swdType) {
+      document.querySelectorAll('[id="a-swdType"] .swd-btn, .swd-btn').forEach(b => {
+        if ((b.dataset.val || b.textContent.trim()) === cust.swdType) b.click();
+      });
+    }
   }
-  // Borrower name auto-generate
-  const bEl = document.getElementById(prefix+'-borrowerName');
-  if (bEl && !bEl.value && cust.name) {
-    const parts = cust.name.split(' ');
-    bEl.value = parts.length>1 ? parts[0][0]+'. '+parts[parts.length-1] : cust.name;
+
+  // ── Form B (Second Verify PL-61iii) ──
+  if (prefix === 'b') {
+    set('b-custName', cust.name);
+    set('b-mobile',   cust.mobile);
+    const v = cust.visits?.[0];
+    if (v?.accNo)  set('b-loanAccNo', v.accNo);
+    if (v?.branch) set('b-branch',    v.branch);
   }
-  // swdType toggle
-  if (cust.swdType) {
-    document.querySelectorAll('#'+prefix+'-swdType-btns .swd-btn').forEach(b=>{
-      b.classList.toggle('active', b.dataset.val===cust.swdType);
-    });
-  }
+
   // Hide dropdown
-  const drop = document.getElementById(prefix+'-cust-drop');
-  if (drop) drop.style.display='none';
+  const drop = document.getElementById(prefix + '-cust-drop');
+  if (drop) drop.style.display = 'none';
 }
 
 function aOnCustNameChange() {
