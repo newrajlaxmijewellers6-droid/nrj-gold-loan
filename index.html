@@ -2318,12 +2318,9 @@ function aGenerateCert() {
   const mktRateLine = d.rate24k ? uniqueCarats.map(c=>`${c} Carat – Rs.${Math.floor(c/24*d.rate24k).toLocaleString('en-IN')}/g`).join('  |  ') : '';
 
   document.getElementById('cert-area').innerHTML=`
-    <div class="cert-letterhead">
-      <div style="display:flex;align-items:center;gap:10px">
-        <svg width="44" height="44" viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cg1a" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#f5c842"/><stop offset="50%" style="stop-color:#e8a800"/><stop offset="100%" style="stop-color:#c47f00"/></linearGradient></defs><circle cx="34" cy="34" r="33" fill="url(#cg1a)"/><circle cx="34" cy="34" r="29" fill="none" stroke="#fffbe0" stroke-width="1" opacity="0.6"/><polygon points="34,12 46,26 34,34 22,26" fill="#fff8dc" stroke="#c47f00" stroke-width="0.8"/><polygon points="34,34 46,26 50,40 34,56 18,40 22,26" fill="#fffbe0" stroke="#c47f00" stroke-width="0.8"/><line x1="34" y1="34" x2="50" y2="40" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><line x1="34" y1="34" x2="18" y2="40" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><line x1="34" y1="34" x2="34" y2="56" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><text x="34" y="23" text-anchor="middle" font-family="Georgia,serif" font-size="6" font-weight="bold" fill="#7a4f00" letter-spacing="1">NRJ</text></svg>
-        <div><div style="font-size:13px;font-weight:800;color:#7a4f00">NEW RAJLAXMI JEWELLERS</div><div style="font-size:9px;color:#a07020">Main Market, Lohogaon, Pune – 411047 | Ph: 8149283535</div></div>
-      </div>
-      <div class="lh-right"><div style="font-size:9px;color:#666">Annexure – PL-61(i)</div><div style="font-size:11px;font-weight:bold;margin-top:2px">APPRAISER CERTIFICATE</div><div style="font-size:9px;color:#666;margin-top:2px">State Bank of India · Gold Loan</div></div>
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:bold;letter-spacing:1px">Annexure – PL-61(i)</div>
+      <div style="font-size:13px;font-weight:bold;text-decoration:underline;margin-top:3px">APPRAISER CERTIFICATE</div>
     </div>
     <div class="cert-header"><div>The Branch Manager<br><b>${d.bankName}</b><br><b>${d.branch}</b></div><div style="text-align:right;font-size:11px">Mob. No.: <b>${d.mobile}</b><br>Ac. No.: <b>${d.accNo}</b></div></div>
     <div class="cert-body">
@@ -2533,12 +2530,8 @@ function bGenerateCert(){
   const mktRateLineB=d.rate24k?uniqueCaratsB.map(c=>`${c} Carat – Rs.${Math.floor(c/24*d.rate24k).toLocaleString('en-IN')}/g`).join('  |  '):'';
 
   document.getElementById('cert-area').innerHTML=`
-    <div class="cert-letterhead">
-      <div style="display:flex;align-items:center;gap:10px">
-        <svg width="44" height="44" viewBox="0 0 68 68" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="cg1b" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#f5c842"/><stop offset="50%" style="stop-color:#e8a800"/><stop offset="100%" style="stop-color:#c47f00"/></linearGradient></defs><circle cx="34" cy="34" r="33" fill="url(#cg1b)"/><circle cx="34" cy="34" r="29" fill="none" stroke="#fffbe0" stroke-width="1" opacity="0.6"/><polygon points="34,12 46,26 34,34 22,26" fill="#fff8dc" stroke="#c47f00" stroke-width="0.8"/><polygon points="34,34 46,26 50,40 34,56 18,40 22,26" fill="#fffbe0" stroke="#c47f00" stroke-width="0.8"/><line x1="34" y1="34" x2="50" y2="40" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><line x1="34" y1="34" x2="18" y2="40" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><line x1="34" y1="34" x2="34" y2="56" stroke="#c47f00" stroke-width="0.5" opacity="0.7"/><text x="34" y="23" text-anchor="middle" font-family="Georgia,serif" font-size="6" font-weight="bold" fill="#7a4f00" letter-spacing="1">NRJ</text></svg>
-        <div><div style="font-size:13px;font-weight:800;color:#7a4f00">NEW RAJLAXMI JEWELLERS</div><div style="font-size:9px;color:#a07020">Main Market, Lohogaon, Pune – 411047 | Ph: 8149283535</div></div>
-      </div>
-      <div class="lh-right"><div style="font-size:9px;color:#666">Annexure – PL-61(iii)</div><div style="font-size:11px;font-weight:bold;margin-top:2px">SECOND VERIFICATION CERTIFICATE</div><div style="font-size:9px;color:#666;margin-top:2px">State Bank of India · Gold Loan</div></div>
+    <div style="text-align:center;margin-bottom:8px">
+      <div style="font-size:11px;font-weight:bold;letter-spacing:1px">Annexure – PL-61(iii)</div>
     </div>
     <div class="cert-title">SECOND VERIFICATION CERTIFICATE</div>
     <div class="cert-date-line">Date: <u><b>${d.certDate}</b></u></div>
