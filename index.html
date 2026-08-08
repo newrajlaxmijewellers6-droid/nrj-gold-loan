@@ -3936,7 +3936,29 @@ function aCollectFormData() {
 
 function aGenerateCert() {
   const items=aGetItems(); if(!items.length){alert('Please add at least one item.');return;}
-  const d=aCollectFormData(); certDataCache={items,d,type:'pl61i'};
+  const d=aCollectFormData();
+
+  // ── Validation ──
+  const aErrs=[];
+  if(!d.custName.trim())       aErrs.push('Customer Name');
+  if(!d.branch.trim())         aErrs.push('Branch Name');
+  if(!d.mobile.trim())         aErrs.push('Mobile Number');
+  if(!d.accNo.trim())          aErrs.push('Account Number');
+  if(!d.residentOf.trim())     aErrs.push('Resident / Address');
+  if(!d.place.trim())          aErrs.push('Place');
+  if(!d.certDate)              aErrs.push('Certificate Date');
+  if(!d.appName.trim())        aErrs.push('Appraiser Name');
+  if(!d.cashIC.trim())         aErrs.push('Cash Officer / Cash In-charge Name');
+  if(!d.rate24k||d.rate24k<=0) aErrs.push('Gold Rate (24K) — enter current market rate');
+  if(!d.netLoan)               aErrs.push('Net Loan Amount — select a scheme to auto-fill');
+  const badItems=items.filter(r=>!(r.gw>0)||!(r.net>0));
+  if(badItems.length)          aErrs.push('Item Gross Weight & Net Weight must be filled for all items');
+  if(aErrs.length){
+    alert('⚠️ Form Incomplete — Cannot Generate!\n\nPlease fill these required fields:\n\n'+aErrs.map((e,i)=>`  ${i+1}. ${e}`).join('\n'));
+    return;
+  }
+
+  certDataCache={items,d,type:'pl61i'};
 
   let tGW=0,tNet=0,tMV=0,tQty=0; items.forEach(r=>{tGW+=r.tGW;tNet+=r.tNet;tMV+=r.tMV;tQty+=(parseInt(r.qty)||0);});
 
@@ -4198,7 +4220,27 @@ function bCollectFormData(){
 
 function bGenerateCert(){
   const items=bGetItems();if(!items.length){alert('Please add at least one item.');return;}
-  const d=bCollectFormData();certDataCache={items,d,type:'pl61iii'};
+  const d=bCollectFormData();
+
+  // ── Validation ──
+  const bErrs=[];
+  if(!d.custName.trim())        bErrs.push('Customer Name');
+  if(!d.branch.trim())          bErrs.push('Branch Name');
+  if(!d.certDate)               bErrs.push('Certificate Date');
+  if(!d.firstAppraiser.trim())  bErrs.push('Name of First Appraiser');
+  if(!d.appName.trim())         bErrs.push('Appraiser Name (your name)');
+  if(!d.cashIncharge.trim())    bErrs.push('Cash Officer / Cash In-charge Name');
+  if(!d.jointCustody.trim())    bErrs.push('Joint Custody Officer Name');
+  if(!d.place.trim())           bErrs.push('Place');
+  if(!d.rate24k||d.rate24k<=0) bErrs.push('Gold Rate (24K) — enter current market rate');
+  const badItemsB=items.filter(r=>!(r.gw>0)||!(r.net>0));
+  if(badItemsB.length)          bErrs.push('Item Gross Weight & Net Weight must be filled for all items');
+  if(bErrs.length){
+    alert('⚠️ Form Incomplete — Cannot Generate!\n\nPlease fill these required fields:\n\n'+bErrs.map((e,i)=>`  ${i+1}. ${e}`).join('\n'));
+    return;
+  }
+
+  certDataCache={items,d,type:'pl61iii'};
   let tGW=0,tNet=0,tMV=0,tQty=0;items.forEach(r=>{tGW+=r.tGW;tNet+=r.tNet;tMV+=r.tMV;tQty+=r.qty||1;});
 
   const itemRowsHTML=items.map(r=>`<tr><td class="c">${r.sno}</td><td>${r.desc||'—'}${r.qty>1?' ('+r.qty+'pcs)':''}</td><td class="c">${pad(r.gw)}</td><td class="c">${r.sw>0?pad(r.sw):'—'}</td><td class="c">${r.purity} Ct</td><td class="c"><b>${pad(r.net)}</b></td><td class="r"><b>Rs.${Math.round(r.tMV).toLocaleString('en-IN')}/-</b></td></tr>`).join('');
