@@ -5183,23 +5183,10 @@ function renderRecords() {
     const items=r.items||[];
     const itemSummary=items.map(i=>`${i.desc||'Item'} (${i.purity}Ct)`).join(', ');
 
-    // Find linked invoices — by recordId OR by loanAccNo match
+    // Find linked invoices — ONLY by recordId (explicit link)
+    // Do NOT match by loanAccNo or notes — causes same invoice to appear on multiple records with same customer
     const _allInvs = getInvoices();
-    const _loanAccNo = r.d?.loanAccNo || r.d?.accNo || '';
-    const linkedInvs = _allInvs.filter(inv=>
-      Number(inv.recordId)===Number(r.id) ||
-      (inv.loanAccNo && _loanAccNo && inv.loanAccNo === _loanAccNo) ||
-      (inv.notes && _loanAccNo && inv.notes.includes(_loanAccNo))
-    );
-    // Auto-link if found by loanAccNo but not by recordId
-    linkedInvs.forEach(inv=>{
-      if(!inv.recordId && r.id) {
-        inv.recordId = r.id;
-        const invs = getInvoices();
-        const idx = invs.findIndex(i=>i.id===inv.id);
-        if(idx>=0) { invs[idx].recordId = r.id; saveInvoices(invs); }
-      }
-    });
+    const linkedInvs = _allInvs.filter(inv=> Number(inv.recordId)===Number(r.id));
     let invoiceBlock = '';
     if(linkedInvs.length){
       invoiceBlock = linkedInvs.map(inv=>{
