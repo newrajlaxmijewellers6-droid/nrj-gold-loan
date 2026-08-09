@@ -431,17 +431,6 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
 
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 4px"></div>
 
-    <!-- Trading -->
-    <div style="color:rgba(255,255,255,.3);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;padding:8px 10px 4px">Trading</div>
-    <button onclick="navGo('goldsale','Gold Sale')" class="nav-item" id="nav-btn-goldsale" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;border-radius:8px;cursor:pointer;margin-bottom:2px;background:transparent;color:rgba(255,255,255,.75);font-size:13px;font-weight:500;text-align:left">
-      <span style="font-size:16px;width:20px;text-align:center;flex-shrink:0">🪙</span>
-      <span style="flex:1">Gold / Silver Sale</span>
-    </button>
-    <button onclick="navGo('purchase','Purchase')" class="nav-item" id="nav-btn-purchase" style="width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;border-radius:8px;cursor:pointer;margin-bottom:2px;background:transparent;color:rgba(255,255,255,.75);font-size:13px;font-weight:500;text-align:left">
-      <span style="font-size:16px;width:20px;text-align:center;flex-shrink:0">📦</span>
-      <span style="flex:1">RD / URD Purchase</span>
-    </button>
-
     <div style="height:1px;background:rgba(255,255,255,.07);margin:8px 4px"></div>
 
     <!-- Settings -->
@@ -964,59 +953,6 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
   </div>
 
   <!-- SETTINGS PANEL -->
-  <div id="report-goldsale" style="display:none">
-    <!-- Search bar -->
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap;position:sticky;top:84px;z-index:150;background:#f5f0e8;padding:8px 0 6px;margin-top:-4px;border-bottom:1px solid #e0d8c8">
-      <input id="gs-search" type="text" placeholder="🔍 Search by name, bill no..." oninput="renderGoldSales()"
-        style="flex:1;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;min-width:200px">
-      <select id="gs-filter-mode" onchange="renderGoldSales()" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px">
-        <option value="">All Modes</option>
-        <option value="Cash">Cash</option>
-        <option value="UPI">UPI</option>
-        <option value="Card">Card</option>
-        <option value="POS Machine">POS Machine</option>
-        <option value="Bank Transfer">Bank Transfer</option>
-        <option value="NEFT/RTGS">NEFT/RTGS</option>
-        <option value="Cheque">Cheque</option>
-        <option value="Old Gold Exchange">Old Gold Exchange</option>
-        <option value="EMI / Finance">EMI / Finance</option>
-        <option value="Credit">Credit</option>
-      </select>
-      <select id="gs-filter-status" onchange="renderGoldSales()" style="padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px">
-        <option value="">All Status</option>
-        <option value="pending">⏳ Pending</option>
-        <option value="settled">✅ Settled</option>
-      </select>
-      <button onclick="document.getElementById('gs-search').value='';document.getElementById('gs-filter-mode').value='';document.getElementById('gs-filter-status').value='';renderGoldSales()" 
-        style="padding:8px 12px;background:#eee;border:none;border-radius:8px;cursor:pointer;font-size:12px">✕ Clear</button>
-    </div>
-  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-    <div style="font-weight:700;font-size:15px;color:#1a3a6b">🪙 Gold Sale</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="openGoldSaleModal()" class="btn btn-primary" style="font-size:13px;padding:8px 14px">+ New Sale</button>
-      <button onclick="openImportModal()" class="btn" style="background:#1a3a6b;color:#fff;border-color:#1a3a6b;font-size:13px">📥 Import Excel</button>
-      <button onclick="openDailySettle()" class="btn" style="background:#166534;color:#fff;border-color:#166534;font-size:13px">💳 Daily Settle</button>
-      <button onclick="openSettlementReport()" class="btn" style="background:#166534;color:#fff;border-color:#166534;font-size:13px">💳 Settlement Report</button>
-      <button onclick="openMonthlyReport()" class="btn" style="background:#1a3a6b;color:#fff;border-color:#1a3a6b;font-size:13px">📊 Monthly Report</button>
-      <button onclick="exportGoldSaleExcel()" class="btn" style="background:#166534;color:#fff;border-color:#166534;font-size:13px">📊 Export</button>
-    </div>
-  </div>
-  <div id="gold-sale-list"></div>
-</div>
-
-<div id="report-purchase" style="display:none">
-  <div class="panel-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px">
-    <div style="font-weight:700;font-size:15px;color:#1a3a6b">📦 RD / URD Purchase</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button onclick="openPurchaseModal('RD')" class="btn btn-primary" style="font-size:13px;padding:8px 14px">+ RD Purchase</button>
-      <button onclick="openPurchaseModal('URD')" class="btn" style="background:#b8860b;color:#fff;border-color:#b8860b;font-size:13px;padding:8px 14px">+ URD Purchase</button>
-      <button onclick="openImportModal()" class="btn" style="background:#1a3a6b;color:#fff;border-color:#1a3a6b;font-size:13px">📥 Import Excel</button>
-      <button onclick="exportPurchaseExcel()" class="btn" style="background:#166534;color:#fff;border-color:#166534;font-size:13px">📊 Export</button>
-    </div>
-  </div>
-  <div id="purchase-list"></div>
-</div>
-
 <div id="report-settings" style="display:none">
   <!-- RATE HISTORY CARD -->
   <div class="card" style="margin-bottom:14px;border:2px solid #b8860b">
@@ -1734,8 +1670,8 @@ function _doSwitchReport(report, el) {
   currentReport = report;
   document.querySelectorAll('.rpt-btn').forEach(b => b.classList.remove('active'));
   if(el) el.classList.add('active');
-  document.getElementById('report-goldsale').style.display  = report==='goldsale' ?'block':'none';
-  document.getElementById('report-purchase').style.display  = report==='purchase'  ?'block':'none';
+  if(document.getElementById('report-goldsale')) document.getElementById('report-goldsale').style.display = 'none';
+  if(document.getElementById('report-purchase'))  document.getElementById('report-purchase').style.display  = 'none';
   document.getElementById('report-pl61i').style.display    = report==='pl61i'    ?'block':'none';
   document.getElementById('report-pl61iii').style.display  = report==='pl61iii'  ?'block':'none';
   document.getElementById('report-records').style.display  = report==='records'  ?'block':'none';
