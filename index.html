@@ -7085,42 +7085,92 @@ function renderBankAccounts(){
     renderBankLedger(); return;
   }
 
+  // Card gradients per bank color
+  const cardGradient = (color) => {
+    const c = color||'#1a3a6b';
+    const map = {
+      '#1a3a6b':'linear-gradient(135deg,#1a3a6b 0%,#2a5298 50%,#0f2447 100%)',
+      '#166534':'linear-gradient(135deg,#166534 0%,#15803d 50%,#052e16 100%)',
+      '#7c2d12':'linear-gradient(135deg,#7c2d12 0%,#c2410c 50%,#431407 100%)',
+      '#6b21a8':'linear-gradient(135deg,#6b21a8 0%,#9333ea 50%,#3b0764 100%)',
+      '#0f766e':'linear-gradient(135deg,#0f766e 0%,#0d9488 50%,#042f2e 100%)',
+      '#b45309':'linear-gradient(135deg,#92400e 0%,#d97706 50%,#451a03 100%)',
+    };
+    return map[c] || `linear-gradient(135deg,${c} 0%,${c}cc 100%)`;
+  };
+
   let totalBalance = 0;
   grid.innerHTML = accs.map(a=>{
     const bal = calcBalance(a.id, a.openingBalance||0, txns);
     totalBalance += bal;
     const accTxns = txns.filter(t=>t.accountId===a.id||t.toAccountId===a.id);
     const lastTxn = accTxns.sort((x,y)=>(y.date||'').localeCompare(x.date||''))[0];
-    const lastDate = lastTxn ? new Date(lastTxn.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) : 'No transactions';
-    return `<div style="border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.1)">
-      <div style="background:${a.color||'#1a3a6b'};color:#fff;padding:14px 16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    const lastDate = lastTxn ? new Date(lastTxn.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : 'No transactions';
+    const accNum = (a.accountNumber||'0000000000').replace(/\s/g,'');
+    const maskedNum = accNum.length>=8 ? '•••• •••• ••••  '+accNum.slice(-4) : '•••• '+accNum.slice(-4);
+    const isNeg = bal < 0;
+    const grad = cardGradient(a.color||'#1a3a6b');
+    const creditIn  = accTxns.filter(t=>t.type==='credit').reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+    const debitOut  = accTxns.filter(t=>t.type==='debit').reduce((s,t)=>s+(parseFloat(t.amount)||0),0);
+
+    return `<div style="border-radius:16px;overflow:hidden;box-shadow:0 8px 32px rgba(0,0,0,.18);transition:transform .15s" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform=''">
+      <!-- Card face -->
+      <div style="background:${grad};color:#fff;padding:20px 20px 16px;min-height:160px;position:relative;overflow:hidden">
+        <!-- Decorative circles -->
+        <div style="position:absolute;top:-30px;right:-30px;width:130px;height:130px;border-radius:50%;background:rgba(255,255,255,.07)"></div>
+        <div style="position:absolute;bottom:-40px;right:20px;width:100px;height:100px;border-radius:50%;background:rgba(255,255,255,.05)"></div>
+        <!-- Bank name row -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px">
           <div>
-            <div style="font-size:13px;font-weight:800;letter-spacing:.02em">${a.bankName}</div>
-            <div style="font-size:10px;opacity:.8;margin-top:2px">${a.accountType||''} • ••••${(a.accountNumber||'').slice(-4)}</div>
-            <div style="font-size:10px;opacity:.7;margin-top:1px">${a.branch||''}</div>
+            <div style="font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;opacity:.95">${a.bankName}</div>
+            <div style="font-size:10px;opacity:.65;margin-top:2px;letter-spacing:.02em">${a.accountType||'Bank Account'}</div>
+          </div>
+          <div style="width:36px;height:26px;border-radius:4px;background:linear-gradient(135deg,#f5d67e,#d4a017);display:flex;align-items:center;justify-content:center">
+            <svg width="22" height="16" viewBox="0 0 22 16" fill="none"><rect x="0" y="0" width="22" height="16" rx="2" fill="none"/><ellipse cx="8" cy="8" rx="7" ry="7" fill="#d4a017" opacity=".9"/><ellipse cx="14" cy="8" rx="7" ry="7" fill="#f5c518" opacity=".7"/></svg>
+          </div>
+        </div>
+        <!-- Chip + account number -->
+        <div style="margin-bottom:12px">
+          <div style="font-size:12px;letter-spacing:.18em;opacity:.9;font-family:monospace;font-weight:600">${maskedNum}</div>
+        </div>
+        <!-- Balance -->
+        <div style="display:flex;justify-content:space-between;align-items:flex-end">
+          <div>
+            <div style="font-size:9px;opacity:.6;text-transform:uppercase;letter-spacing:.08em">Available Balance</div>
+            <div style="font-size:22px;font-weight:900;letter-spacing:-.01em;color:${isNeg?'#fca5a5':'#fff'}">${isNeg?'−':''}₹${Math.abs(Math.round(bal)).toLocaleString('en-IN')}</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:10px;opacity:.7">Balance</div>
-            <div style="font-size:20px;font-weight:800">${bal>=0?'':'−'}₹${Math.abs(Math.round(bal)).toLocaleString('en-IN')}</div>
+            <div style="font-size:9px;opacity:.6;text-transform:uppercase;letter-spacing:.05em">${a.branch||''}</div>
+            <div style="font-size:9px;opacity:.55;margin-top:2px">${accTxns.length} transactions</div>
           </div>
         </div>
       </div>
-      <div style="background:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border:1px solid #e8e0cc;border-top:none;border-radius:0 0 12px 12px">
-        <div style="font-size:10px;color:#888">Last: ${lastDate} • ${accTxns.length} txns</div>
-        <div style="display:flex;gap:6px">
-          <button onclick="showAddTransaction(${a.id})" style="font-size:11px;padding:4px 9px;border:1px solid #b0c4e8;border-radius:6px;background:#e8f0ff;color:#1a3a6b;cursor:pointer">+ Txn</button>
-          <button onclick="editAccount(${a.id})" style="font-size:11px;padding:4px 9px;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer">Edit</button>
-          <button onclick="deleteAccount(${a.id})" style="font-size:11px;padding:4px 9px;border:1px solid #f5b7b1;border-radius:6px;background:#fef9f9;color:#b91c1c;cursor:pointer">Del</button>
+      <!-- Card footer -->
+      <div style="background:#fff;padding:10px 14px;border:1px solid #e0e8f5;border-top:none;border-radius:0 0 16px 16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="display:flex;gap:10px">
+            <span style="font-size:10px;color:#166534">↑ ₹${Math.round(creditIn).toLocaleString('en-IN')}</span>
+            <span style="font-size:10px;color:#b91c1c">↓ ₹${Math.round(debitOut).toLocaleString('en-IN')}</span>
+          </div>
+          <div style="font-size:9px;color:#999">Last: ${lastDate}</div>
+        </div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+          <button onclick="showAddTransaction(${a.id})" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid #b0c4e8;border-radius:8px;background:linear-gradient(135deg,#e8f0ff,#dce8ff);color:#1a3a6b;cursor:pointer;font-weight:700">+ Txn</button>
+          <button onclick="showBankStatement(${a.id})" style="flex:1;font-size:11px;padding:5px 8px;border:1px solid #a0d4b0;border-radius:8px;background:linear-gradient(135deg,#f0fff4,#dcfce7);color:#166534;cursor:pointer;font-weight:700">📋 Stmt</button>
+          <button onclick="editAccount(${a.id})" style="font-size:11px;padding:5px 8px;border:1px solid #ddd;border-radius:8px;background:#f9f9f9;cursor:pointer">✏️</button>
+          <button onclick="deleteAccount(${a.id})" style="font-size:11px;padding:5px 8px;border:1px solid #f5b7b1;border-radius:8px;background:#fff5f5;color:#b91c1c;cursor:pointer">🗑</button>
         </div>
       </div>
     </div>`;
   }).join('');
 
   // Total balance strip
-  grid.innerHTML += `<div style="grid-column:1/-1;background:#1a3a6b;color:#fff;border-radius:10px;padding:12px 18px;display:flex;justify-content:space-between;align-items:center">
-    <span style="font-weight:700;font-size:14px">💰 Total Balance (All Accounts)</span>
-    <span style="font-size:20px;font-weight:800">${totalBalance>=0?'':'−'}₹${Math.abs(Math.round(totalBalance)).toLocaleString('en-IN')}/-</span>
+  grid.innerHTML += `<div style="grid-column:1/-1;background:linear-gradient(135deg,#0f2447,#1a3a6b,#2a5298);color:#fff;border-radius:14px;padding:16px 22px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 4px 18px rgba(26,58,107,.3)">
+    <div>
+      <div style="font-size:10px;opacity:.65;text-transform:uppercase;letter-spacing:.1em">Total Balance — All Accounts</div>
+      <div style="font-size:24px;font-weight:900;margin-top:2px">${totalBalance>=0?'':'−'}₹${Math.abs(Math.round(totalBalance)).toLocaleString('en-IN')}/-</div>
+    </div>
+    <div style="font-size:32px;opacity:.3">🏦</div>
   </div>`;
 
   renderBankLedger();
@@ -7145,11 +7195,23 @@ function renderBankLedger(){
 
   const sumEl = document.getElementById('bank-ledger-summary');
   if(sumEl && txns.length){
-    sumEl.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;font-size:12px">
-      <span style="background:#f0fff4;border:1px solid #a0d4b0;border-radius:8px;padding:6px 12px">💚 In: <b style="color:#166534">₹${Math.round(totalIn).toLocaleString('en-IN')}/-</b></span>
-      <span style="background:#fff5f5;border:1px solid #f5b7b1;border-radius:8px;padding:6px 12px">🔴 Out: <b style="color:#b91c1c">₹${Math.round(totalOut).toLocaleString('en-IN')}/-</b></span>
-      ${totalTfr?`<span style="background:#f0f5ff;border:1px solid #b0c4e8;border-radius:8px;padding:6px 12px">⇄ Transfers: <b style="color:#1a3a6b">₹${Math.round(totalTfr).toLocaleString('en-IN')}/-</b></span>`:''}
-      <span style="background:#f5f5f5;border:1px solid #ccc;border-radius:8px;padding:6px 12px">Net: <b style="color:${totalIn-totalOut>=0?'#166534':'#b91c1c'}">₹${Math.round(totalIn-totalOut).toLocaleString('en-IN')}/-</b></span>
+    sumEl.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px">
+      <div style="background:linear-gradient(135deg,#f0fff4,#dcfce7);border:1px solid #86efac;border-radius:10px;padding:10px 14px">
+        <div style="font-size:9px;color:#166534;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Total In</div>
+        <div style="font-size:16px;font-weight:800;color:#166534">₹${Math.round(totalIn).toLocaleString('en-IN')}</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#fff5f5,#fee2e2);border:1px solid #fca5a5;border-radius:10px;padding:10px 14px">
+        <div style="font-size:9px;color:#b91c1c;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Total Out</div>
+        <div style="font-size:16px;font-weight:800;color:#b91c1c">₹${Math.round(totalOut).toLocaleString('en-IN')}</div>
+      </div>
+      ${totalTfr?`<div style="background:linear-gradient(135deg,#f0f5ff,#e8f0ff);border:1px solid #b0c4e8;border-radius:10px;padding:10px 14px">
+        <div style="font-size:9px;color:#1a3a6b;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Transfers</div>
+        <div style="font-size:16px;font-weight:800;color:#1a3a6b">₹${Math.round(totalTfr).toLocaleString('en-IN')}</div>
+      </div>`:''}
+      <div style="background:linear-gradient(135deg,${totalIn-totalOut>=0?'#f0fff4,#dcfce7':'#fff5f5,#fee2e2'});border:1px solid ${totalIn-totalOut>=0?'#86efac':'#fca5a5'};border-radius:10px;padding:10px 14px">
+        <div style="font-size:9px;color:${totalIn-totalOut>=0?'#166534':'#b91c1c'};font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Net Flow</div>
+        <div style="font-size:16px;font-weight:800;color:${totalIn-totalOut>=0?'#166534':'#b91c1c'}">${totalIn-totalOut>=0?'+':'−'}₹${Math.abs(Math.round(totalIn-totalOut)).toLocaleString('en-IN')}</div>
+      </div>
     </div>`;
   } else if(sumEl) sumEl.innerHTML='';
 
@@ -7164,18 +7226,17 @@ function renderBankLedger(){
     const isTransfer = t.type==='transfer';
     const dateStr = t.date ? new Date(t.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '—';
     const color = isTransfer?'#1a3a6b':isCredit?'#166534':'#b91c1c';
-    const sign  = isTransfer?'⇄':isCredit?'+':'−';
-    return `<div style="border:1px solid #e8e0cc;border-radius:8px;padding:10px 14px;margin-bottom:7px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;background:#fff;border-left:4px solid ${color}">
-      <div>
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span style="background:${isTransfer?'#e8f0ff':isCredit?'#f0fff4':'#fff5f5'};color:${color};border-radius:10px;padding:2px 9px;font-size:11px;font-weight:700">${t.category||t.type}</span>
-          <span style="font-size:13px;font-weight:700;color:#1a3a6b">${t.desc||'—'}</span>
-        </div>
-        <div style="font-size:11px;color:#666;margin-top:4px">
-          📅 ${dateStr} &nbsp;|&nbsp; ${getAccName(t.accountId)}
-          ${isTransfer?` → ${getAccName(t.toAccountId)}`:''}
-          ${t.party?` &nbsp;|&nbsp; ${t.party}`:''}
-          ${t.ref?` &nbsp;|&nbsp; Ref: ${t.ref}`:''}
+    const icon  = isTransfer?'⇄':isCredit?'↑':'↓';
+    const bgIcon = isTransfer?'#e8f0ff':isCredit?'#dcfce7':'#fee2e2';
+    return `<div style="border:1px solid #e8eef8;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.05)">
+      <div style="display:flex;gap:10px;align-items:flex-start;flex:1">
+        <div style="width:34px;height:34px;border-radius:50%;background:${bgIcon};display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;color:${color};font-weight:900">${icon}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#1a3a6b">${t.desc||'—'}</div>
+          <div style="font-size:10px;color:#888;margin-top:3px">
+            ${dateStr}${t.party?' &nbsp;·&nbsp; '+t.party:''} &nbsp;·&nbsp; ${getAccName(t.accountId)}${isTransfer?' → '+getAccName(t.toAccountId):''}${t.ref?' &nbsp;·&nbsp; Ref: '+t.ref:''}
+          </div>
+          <div style="margin-top:4px"><span style="background:${bgIcon};color:${color};border-radius:8px;padding:1px 8px;font-size:10px;font-weight:700">${t.category||t.type}</span></div>
         </div>
       </div>
       <div style="text-align:right">
