@@ -7617,16 +7617,12 @@ function exportExcel(type) {
         'Date':           inv.date?new Date(inv.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'',
         'Customer':       inv.custName||'',
         'GSTIN (Buyer)':  inv.custGstin||'Unregistered',
-        'Place of Supply':inv.custState||'Maharashtra',
-        'HSN/SAC':        inv.items?.[0]?.hsn||'998599',
         'Taxable Amount': inv.taxable||0,
-        'GST Type':       inv.gstType||'',
-        'GST Rate %':     inv.gstRate||0,
         'CGST':           inv.gstType==='cgst_sgst'?Math.round((inv.taxAmt||0)/2):0,
         'SGST':           inv.gstType==='cgst_sgst'?Math.round((inv.taxAmt||0)/2):0,
-        'IGST':           inv.gstType==='igst'?inv.taxAmt||0:0,
         'Total Tax':      inv.taxAmt||0,
-        'Invoice Total':  inv.total||0
+        'Invoice Total':  inv.total||0,
+        'Status':         (()=>{const s=getInvoiceStatus(inv);return s==='paid'?'PAID':s==='partial'?'PARTIAL':'UNPAID';})()
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       // Add TOTAL row at bottom of GST Report sheet
@@ -7635,16 +7631,12 @@ function exportExcel(type) {
         'Date':           '',
         'Customer':       invs.length+' invoices',
         'GSTIN (Buyer)':  '',
-        'Place of Supply':'',
-        'HSN/SAC':        '',
         'Taxable Amount': Math.round(invs.reduce((s,i)=>s+(i.taxable||0),0)),
-        'GST Type':       '',
-        'GST Rate %':     '',
         'CGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='cgst_sgst'?Math.round((i.taxAmt||0)/2):0),0)),
         'SGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='cgst_sgst'?Math.round((i.taxAmt||0)/2):0),0)),
-        'IGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='igst'?i.taxAmt||0:0),0)),
         'Total Tax':      Math.round(invs.reduce((s,i)=>s+(i.taxAmt||0),0)),
-        'Invoice Total':  Math.round(invs.reduce((s,i)=>s+(i.total||0),0))
+        'Invoice Total':  Math.round(invs.reduce((s,i)=>s+(i.total||0),0)),
+        'Status':         ''
       }], {skipHeader:true, origin:-1});
       _xlsxStyle(ws, rows.length);
       XLSX.utils.book_append_sheet(wb, ws, 'GST Report');
