@@ -5509,6 +5509,8 @@ function renderGSTReport() {
 
 function gstFilterInvs(month,fy) {
   const all = getAllInvoicesForGST();
+  // Filter strictly by invoice date (GST law requires invoice date for return filing)
+  // The month selector is populated from invoice dates so this is always consistent
   if(month) return all.filter(i=>(i.date||'').startsWith(month));
   if(fy) { const [y1,y2]=fy.split('-').map(Number); return all.filter(i=>{const d=i.date||'';const y=+d.slice(0,4),m=+d.slice(5,7);return(y===y1&&m>=4)||(y===y2&&m<=3);}); }
   return all;
@@ -14249,8 +14251,8 @@ function autoInvoiceAfterCert(recId, d) {
   const total  = slabAmt+gstAmt;
   const inv = {
     id:          Date.now(),
-    no:          nextInvoiceNo(today),
-    date:        today,
+    no:          nextInvoiceNo(certDate),
+    date:        certDate,
     recordId:    recId,
     loanAccNo,
     custName:    d.custName||'',
@@ -14308,8 +14310,8 @@ function autoInvoiceAfterSecondVerify(recId, d, marketValue) {
   const total  = slabAmt+gstAmt;
   const inv = {
     id:          Date.now(),
-    no:          nextInvoiceNo(today),
-    date:        today,
+    no:          nextInvoiceNo(certDate),
+    date:        certDate,
     recordId:    recId,
     loanAccNo,
     custName:    d.custName||'',
