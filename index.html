@@ -1147,6 +1147,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
         <button onclick="removeDuplicateTxns()" class="btn" style="font-size:13px;padding:8px 14px;background:#b91c1c;color:#fff;border-color:#b91c1c">🧹 Remove Duplicates</button>
         <button onclick="importBankStatement()" class="btn" style="font-size:13px;padding:8px 14px;background:#1a3a6b;color:#fff;border-color:#1a3a6b">📄 Import Statement</button>
         <button onclick="setupPaytmAccount()" class="btn" style="font-size:13px;padding:8px 14px;background:#7c3aed;color:#fff;border-color:#7c3aed">💳 Setup UPI/POS Account</button>
+        <button onclick="openMonthlyOpeningModal()" class="btn" style="font-size:13px;padding:8px 14px;background:#0f766e;color:#fff;border-color:#0f766e">📅 Set Monthly Opening Bal</button>
         <button onclick="showAddAccount()" class="btn btn-primary" style="font-size:13px;padding:8px 14px">+ Add Account</button>
       </div>
     </div>
@@ -1434,6 +1435,40 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
         <div id="ca-report-area"></div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- MONTHLY OPENING BALANCE MODAL -->
+  <div id="monthly-opening-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;align-items:center;justify-content:center;padding:10px">
+    <div style="background:#fff;border-radius:12px;padding:22px;width:92vw;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+      <div style="font-weight:800;font-size:15px;color:#0f766e;margin-bottom:6px">📅 Set Monthly Opening Balance</div>
+      <div style="font-size:12px;color:#666;margin-bottom:14px">Use this when you've lost transaction history. Set the exact balance for a specific date — the app will calculate forward from there.</div>
+      <div style="display:grid;gap:12px">
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">Account</label>
+          <select id="mob-account" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;font-size:13px"></select>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">As On Date</label>
+          <input type="date" id="mob-date" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">Balance on that date (₹)</label>
+          <input type="number" id="mob-amount" placeholder="e.g. 45000" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+          <div style="font-size:10px;color:#888;margin-top:4px">Enter negative if account was in overdraft</div>
+        </div>
+        <div>
+          <label style="font-size:11px;font-weight:700;color:#555;display:block;margin-bottom:4px">Note (optional)</label>
+          <input type="text" id="mob-note" placeholder="e.g. June 2026 opening — June data lost" style="width:100%;padding:9px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;margin-top:14px;font-size:11px;color:#166534">
+        ✅ All transactions <b>after</b> this date will be calculated on top of this balance. Transactions before this date will be ignored.
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px;justify-content:flex-end">
+        <button onclick="document.getElementById('monthly-opening-modal').style.display='none'" class="btn">Cancel</button>
+        <button onclick="saveMonthlyOpening()" class="btn btn-primary" style="background:#0f766e;border-color:#0f766e">✅ Save Opening Balance</button>
+      </div>
     </div>
   </div>
 
@@ -2202,6 +2237,42 @@ function setPayPeriod(period, el) {
   document.querySelectorAll('#pay-period-tabs .period-tab').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
   renderPayments();
+}
+
+function openMonthlyOpeningModal() {
+  const m = document.getElementById('monthly-opening-modal');
+  if(!m) return;
+  // Populate account dropdown
+  const sel = document.getElementById('mob-account');
+  const accs = getBankAccounts();
+  sel.innerHTML = accs.map(a=>`<option value="${a.id}">${a.bankName} – ••••${(a.accountNumber||'').slice(-4)}</option>`).join('');
+  // Default date to 1st of current month
+  const today = new Date();
+  document.getElementById('mob-date').value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-01`;
+  document.getElementById('mob-amount').value = '';
+  document.getElementById('mob-note').value = '';
+  m.style.display = 'flex';
+}
+
+function saveMonthlyOpening() {
+  const accId  = parseInt(document.getElementById('mob-account')?.value);
+  const date   = document.getElementById('mob-date')?.value;
+  const amount = parseFloat(document.getElementById('mob-amount')?.value);
+  const note   = document.getElementById('mob-note')?.value||'';
+  if(!accId || !date) { alert('Please select an account and date.'); return; }
+  if(isNaN(amount))   { alert('Please enter a valid balance amount.'); return; }
+  const txns = getBankTxns();
+  // Remove any existing opening reset for same account + date
+  const filtered = txns.filter(t=>!(t.type==='opening' && parseInt(t.accountId)===accId && t.date===date));
+  filtered.push({
+    id: Date.now(), accountId: accId, type: 'opening',
+    date, amount, desc: note||`Opening Balance — ${new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}`,
+    category: 'Opening Balance', createdAt: new Date().toISOString()
+  });
+  saveBankTxns(filtered);
+  document.getElementById('monthly-opening-modal').style.display = 'none';
+  renderBankAccounts();
+  _showToast?.(`✅ Opening balance of ₹${Math.abs(amount).toLocaleString('en-IN')} set for ${new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}`, '#0f766e');
 }
 
 function toggleRecFilter() {
@@ -7038,16 +7109,26 @@ function calcBalance(accId, opening, txns){
     parseInt(t.accountId)===_aid || t.accountId===_aid ||
     parseInt(t.toAccountId)===_aid || t.toAccountId===_aid
   );
-  return acTxns.reduce((bal,t)=>{
+  // Check for monthly opening balance resets — use the LATEST one as base
+  const resetTxns = acTxns.filter(t=>t.type==='opening').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  let base = parseFloat(opening)||0;
+  let fromDate = null;
+  if(resetTxns.length){
+    base = parseFloat(resetTxns[0].amount)||0;
+    fromDate = resetTxns[0].date;
+  }
+  // Only count transactions AFTER the latest opening reset
+  const eligible = fromDate ? acTxns.filter(t=>t.type!=='opening' && (t.date||'')>fromDate) : acTxns.filter(t=>t.type!=='opening');
+  return eligible.reduce((bal,t)=>{
     const amt = parseFloat(t.amount)||0;
-    if(t.type==='credit' && t.accountId===accId) return bal+amt;
-    if(t.type==='debit'  && t.accountId===accId) return bal-amt;
+    if(t.type==='credit'   && (parseInt(t.accountId)===_aid||t.accountId===_aid)) return bal+amt;
+    if(t.type==='debit'    && (parseInt(t.accountId)===_aid||t.accountId===_aid)) return bal-amt;
     if(t.type==='transfer'){
-      if(t.accountId===accId) return bal-amt;   // from
-      if(t.toAccountId===accId) return bal+amt;  // to
+      if(parseInt(t.accountId)===_aid||t.accountId===_aid) return bal-amt;
+      if(parseInt(t.toAccountId)===_aid||t.toAccountId===_aid) return bal+amt;
     }
     return bal;
-  }, parseFloat(opening)||0);
+  }, base);
 }
 
 function setBankPeriod(p, el){
