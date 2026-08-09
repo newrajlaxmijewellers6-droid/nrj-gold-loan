@@ -7629,6 +7629,23 @@ function exportExcel(type) {
         'Invoice Total':  inv.total||0
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
+      // Add TOTAL row at bottom of GST Report sheet
+      XLSX.utils.sheet_add_json(ws, [{
+        'Invoice No':     'TOTAL',
+        'Date':           '',
+        'Customer':       invs.length+' invoices',
+        'GSTIN (Buyer)':  '',
+        'Place of Supply':'',
+        'HSN/SAC':        '',
+        'Taxable Amount': Math.round(invs.reduce((s,i)=>s+(i.taxable||0),0)),
+        'GST Type':       '',
+        'GST Rate %':     '',
+        'CGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='cgst_sgst'?Math.round((i.taxAmt||0)/2):0),0)),
+        'SGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='cgst_sgst'?Math.round((i.taxAmt||0)/2):0),0)),
+        'IGST':           Math.round(invs.reduce((s,i)=>s+(i.gstType==='igst'?i.taxAmt||0:0),0)),
+        'Total Tax':      Math.round(invs.reduce((s,i)=>s+(i.taxAmt||0),0)),
+        'Invoice Total':  Math.round(invs.reduce((s,i)=>s+(i.total||0),0))
+      }], {skipHeader:true, origin:-1});
       _xlsxStyle(ws, rows.length);
       XLSX.utils.book_append_sheet(wb, ws, 'GST Report');
       // Monthly summary — of filtered set only
@@ -7642,6 +7659,15 @@ function exportExcel(type) {
         byMonth[m].total += inv.total||0;
       });
       const mRows = Object.values(byMonth).map(m=>({'Month':m.month,'Taxable':Math.round(m.taxable),'CGST':Math.round(m.cgst),'SGST':Math.round(m.sgst),'IGST':Math.round(m.igst),'Total':Math.round(m.total)}));
+      // Grand total row for monthly summary
+      mRows.push({
+        'Month':'GRAND TOTAL',
+        'Taxable':Math.round(mRows.reduce((s,r)=>s+r['Taxable'],0)),
+        'CGST':Math.round(mRows.reduce((s,r)=>s+r['CGST'],0)),
+        'SGST':Math.round(mRows.reduce((s,r)=>s+r['SGST'],0)),
+        'IGST':Math.round(mRows.reduce((s,r)=>s+r['IGST'],0)),
+        'Total':Math.round(mRows.reduce((s,r)=>s+r['Total'],0))
+      });
       const ws2 = XLSX.utils.json_to_sheet(mRows);
       _xlsxStyle(ws2, mRows.length);
       XLSX.utils.book_append_sheet(wb, ws2, 'Monthly GST Summary');
