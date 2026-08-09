@@ -2261,19 +2261,6 @@ function setInvPeriod(period, el) {
   renderInvoices();
 }
 
-// Invoice specific date filter support in filterByPeriod
-const _origFilterByPeriod = filterByPeriod;
-function filterByPeriod(items, dateField, period) {
-  if(period === 'specific') {
-    const d = dateField === 'date'
-      ? (document.getElementById('inv-specific-date')?.value || '')
-      : (document.getElementById('rec-specific-date')?.value || '');
-    if(!d) return items;
-    return items.filter(i => (i[dateField]||'').startsWith(d));
-  }
-  return _origFilterByPeriod(items, dateField, period);
-}
-
 function setPayPeriod(period, el) {
   payPeriod = period;
   document.querySelectorAll('#pay-period-tabs .period-tab').forEach(b => b.classList.remove('active'));
@@ -2333,6 +2320,14 @@ function getPeriodDateRange(period) {
 }
 
 function filterByPeriod(items, dateField, period) {
+  if(period === 'specific') {
+    // Pick the right date input based on which section is calling
+    const invDate = document.getElementById('inv-specific-date')?.value || '';
+    const recDate = document.getElementById('rec-specific-date')?.value || '';
+    const d = invDate || recDate;
+    if(!d) return items;
+    return items.filter(i => (i[dateField]||'').split('T')[0] === d);
+  }
   const {from, to} = getPeriodDateRange(period);
   if(!from && !to) return items;
   return items.filter(item => {
