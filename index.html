@@ -851,7 +851,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
         <div class="card-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">🗂 Saved Records</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button onclick="exportExcel('records')" class="btn" style="font-size:12px;padding:6px 12px;background:#1a6b3a;color:#fff;border-color:#1a6b3a">📊 Excel</button>
-      <input id="rec-search" type="text" placeholder="Search customer / A/c..." oninput="renderRecords()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;min-width:180px">
+      <input id="rec-search" type="text" placeholder="Search customer / A/c..." oninput="renderRecordsDebounced()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;min-width:180px">
           <button id="rec-select-btn" onclick="toggleRecordSelectMode()" class="btn btn-sm" style="font-size:13px;padding:8px 14px;background:#1a6b3a;color:#fff;border-color:#1a6b3a;font-weight:700">☑ Select for Invoice</button>
           <button class="btn btn-sm" onclick="refreshPanel('records',this)" title="Refresh Records" style="background:#e8f0ff;border-color:#b0c4e8;color:#1a3a6b;font-size:16px;padding:6px 12px;min-height:38px">↻</button>
           <button class="btn btn-sm btn-del" onclick="clearAllRecords()">🗑 Clear All</button>
@@ -912,7 +912,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;position:sticky;top:84px;z-index:150;background:#fff;padding:8px 0 6px;border-bottom:1px solid #eee">
         <div class="card-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">🧾 Invoices</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input id="inv-search" type="text" placeholder="Search customer / invoice no..." oninput="renderInvoices()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;min-width:180px">
+          <input id="inv-search" type="text" placeholder="Search customer / invoice no..." oninput="renderInvoicesDebounced()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;min-width:180px">
           <button class="btn btn-sm" onclick="refreshPanel('invoices',this)" title="Refresh Invoices" style="background:#e8f0ff;border-color:#b0c4e8;color:#1a3a6b;font-size:16px;padding:6px 12px;min-height:38px">↻</button>
           <button onclick="exportExcel('invoices')" class="btn btn-sm" style="background:#1a6b3a;color:#fff;border-color:#1a6b3a">📊 Excel</button>
           <button class="btn btn-sm btn-primary" onclick="openNewInvoiceModal()">+ GST Invoice</button>
@@ -2380,12 +2380,12 @@ function renderInvoices() {
   const pBalance = pBilled - pPaid;
   renderPeriodSummary('inv-period-summary', invPeriod, pBilled, pPaid, pBalance, periodInvs.length, 'invoice' + (periodInvs.length!==1?'s':''));
   // Apply text search on period-filtered set
-  if(q) periodInvs = periodInvs.filter(inv=>
+  if(q) { window._invPage=1; periodInvs = periodInvs.filter(inv=>
     (inv.custName||'').toLowerCase().includes(q) ||
     (inv.no||'').toLowerCase().includes(q) ||
     (inv.custMobile||'').includes(q) ||
     (inv.notes||'').toLowerCase().includes(q)
-  );
+  ); }
   const container = document.getElementById('invoices-list');
   if(!container) return;
   if(!getInvoices().length){
@@ -2397,7 +2397,11 @@ function renderInvoices() {
     container.innerHTML=`<div class="rec-empty"><div style="font-size:28px;margin-bottom:8px">🔍</div><div>${msg}</div></div>`;
     return;
   }
-  container.innerHTML = periodInvs.map(inv=>{
+  // Pagination — show 50 at a time
+  const INV_PAGE=50;
+  const isSearchingInv=!!q;
+  const showInvs = isSearchingInv ? periodInvs : periodInvs.slice(0, (window._invPage||1)*INV_PAGE);
+  container.innerHTML = showInvs.map(inv=>{
     const paid   = getInvoicePaid(inv.id);
     const bal    = inv.total - paid;
     const status = getInvoiceStatus(inv);
@@ -2445,12 +2449,17 @@ function renderInvoices() {
       </div>
     </div>`;
   }).join('');
+  // Load More button for invoices
+  if(!isSearchingInv && periodInvs.length > showInvs.length){
+    const rem=periodInvs.length-showInvs.length;
+    container.innerHTML+=`<div style="text-align:center;padding:16px">
+      <button onclick="window._invPage=(window._invPage||1)+1;renderInvoices()" class="btn btn-sm" style="background:#1a3a6b;color:#fff;padding:10px 28px;font-size:13px">
+        ⬇ Load More (${rem} remaining)
+      </button>
+    </div>`;
+  }
   updateInvoiceBadges();
 }
-
-// ═══════════════════════════════════════════════════════════
-// ██████  PAYMENT SYSTEM
-// ═══════════════════════════════════════════════════════════
 
 function openPaymentModal(invId) {
   const inv = getInvoices().find(i=>i.id===invId); if(!inv) return;
@@ -5120,6 +5129,17 @@ function loadIntoFormB(rec) {
   document.querySelector('#report-pl61iii .tabs .tab-btn').click();
 }
 
+// ── Search debounce timers ──
+let _recSearchTimer=null, _invSearchTimer=null;
+function renderRecordsDebounced(){
+  clearTimeout(_recSearchTimer);
+  _recSearchTimer=setTimeout(renderRecords, 220);
+}
+function renderInvoicesDebounced(){
+  clearTimeout(_invSearchTimer);
+  _invSearchTimer=setTimeout(renderInvoices, 220);
+}
+
 function renderRecords() {
   const q=(document.getElementById('rec-search')?.value||'').toLowerCase().trim();
   let recs=getRecords();
@@ -5153,6 +5173,8 @@ function renderRecords() {
   // Period summary (before text search)
   const totalMV = periodRecs.reduce((s,r)=>s+(r.tMV||0),0);
   renderRecPeriodSummary('rec-period-summary', recPeriod, totalMV, periodRecs.length);
+  // Reset pagination when filter/search changes
+  if(q) window._recPage=1;
   // Apply text search on period-filtered set
   if(q) periodRecs=periodRecs.filter(r=>{
     const d=r.d;
@@ -5171,7 +5193,11 @@ function renderRecords() {
     container.innerHTML=`<div class="rec-empty"><div style="font-size:28px;margin-bottom:8px">🔍</div><div>${msg}</div></div>`;
     return;
   }
-  container.innerHTML=periodRecs.map((r,idx)=>{
+  // Pagination — show 50 at a time for performance
+  const PAGE=50;
+  const isSearching=!!q;
+  const showRecs = isSearching ? periodRecs : periodRecs.slice(0, window._recPage ? window._recPage*PAGE : PAGE);
+  container.innerHTML=showRecs.map((r,idx)=>{
     const d=r.d;
     const sno=periodRecs.length-idx; // descending: newest = highest number
     // Both PL-61(i) and PL-61(iii) — lead with Record Number for consistency
@@ -5259,6 +5285,15 @@ function renderRecords() {
       </div>
     </div>`;
   }).join('');
+  // Load More button
+  if(!isSearching && periodRecs.length > showRecs.length){
+    const remaining=periodRecs.length-showRecs.length;
+    container.innerHTML+=`<div style="text-align:center;padding:16px">
+      <button onclick="window._recPage=(window._recPage||1)+1;renderRecords()" class="btn btn-sm" style="background:#1a3a6b;color:#fff;padding:10px 28px;font-size:13px">
+        ⬇ Load More (${remaining} remaining)
+      </button>
+    </div>`;
+  }
   updateRecordsBadge();
 }
 
@@ -7572,7 +7607,11 @@ function exportExcel(type) {
     }
 
     else if(type === 'gst') {
-      const invs = getInvoices();
+      // Use same month/FY filter as the GST report view
+      const selMonth = document.getElementById('gst-month-sel')?.value||'';
+      const selFY    = document.getElementById('gst-fy-sel')?.value||'';
+      const invs = gstFilterInvs(selMonth, selFY);
+      const monthLabel = selMonth ? new Date(selMonth+'-01').toLocaleDateString('en-IN',{month:'long',year:'numeric'}) : (selFY||'All');
       const rows = invs.map(inv => ({
         'Invoice No':     inv.no||'',
         'Date':           inv.date?new Date(inv.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}):'',
@@ -7592,7 +7631,7 @@ function exportExcel(type) {
       const ws = XLSX.utils.json_to_sheet(rows);
       _xlsxStyle(ws, rows.length);
       XLSX.utils.book_append_sheet(wb, ws, 'GST Report');
-      // Monthly summary
+      // Monthly summary — of filtered set only
       const byMonth = {};
       invs.forEach(inv => {
         const m = inv.date?(new Date(inv.date).toLocaleDateString('en-IN',{month:'short',year:'numeric'})):'Unknown';
@@ -7606,7 +7645,7 @@ function exportExcel(type) {
       const ws2 = XLSX.utils.json_to_sheet(mRows);
       _xlsxStyle(ws2, mRows.length);
       XLSX.utils.book_append_sheet(wb, ws2, 'Monthly GST Summary');
-      XLSX.writeFile(wb, shop+'_GSTReport_'+today+'.xlsx');
+      XLSX.writeFile(wb, shop+'_GSTReport_'+monthLabel.replace(/ /g,'_')+'_'+today+'.xlsx');
     }
 
     _showToast('✅ Excel downloaded!','#1a6b3a');
