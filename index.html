@@ -543,7 +543,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
           </div>
           <div class="field span2"><label>Resident of (Village / Town)</label><input id="a-residentOf" autocomplete="new-password" name="a-residentOf-x" type="text" placeholder="e.g. Kaluad, Pune"></div>
           <div class="field span2"><label>Borrower Signature Name</label><input id="a-borrowerName" type="text" placeholder="e.g. N. Bhapker"></div>
-          <div class="field span2"><label>Customer Email</label><input id="a-custEmail" type="email" placeholder="e.g. customer@gmail.com"></div>
+          <div class="field span2"><label>Customer Email</label><input id="a-custEmail" type="email" placeholder="e.g. customer@gmail.com" list="customer-email-suggestions" autocomplete="off"><datalist id="customer-email-suggestions"></datalist></div>
         </div>
       </div>
 
@@ -1499,7 +1499,8 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
     </div>
     <div class="email-note"><b>Steps:</b> 1. Tap <b>"⬇ Download PDF"</b> → 2. Tap <b>"📧 Open Gmail"</b> → 3. Attach PDF → Send!</div>
     <div class="email-field"><label>To (Branch Email) <span style="color:#b91c1c">*Required</span></label>
-      <input id="emailTo" type="email" placeholder="officer@sbi.co.in" style="border:2px solid #1a3a6b;font-size:14px;font-weight:700">
+      <input id="emailTo" type="email" placeholder="officer@sbi.co.in" style="border:2px solid #1a3a6b;font-size:14px;font-weight:700" list="branch-email-suggestions" autocomplete="off">
+      <datalist id="branch-email-suggestions"></datalist>
     </div>
     <div class="email-field"><label>Subject</label><input id="emailSubject" type="text"></div>
     <div class="email-field"><label>Message</label><textarea id="emailBody" rows="5"></textarea></div>
@@ -4653,7 +4654,7 @@ function refreshPanel(panel, btn) {
   if(panel==='invoices')  renderInvoices();
   if(panel==='payments')  renderPayments();
 }
-function openEmailModal(){document.getElementById('emailModal').classList.add('show');}
+function openEmailModal(){document.getElementById('emailModal').classList.add('show'); populateBranchSuggestions();}
 function closeEmailModal(){document.getElementById('emailModal').classList.remove('show');}
 
 function openMailClient(){
@@ -8530,6 +8531,19 @@ function populateBranchSuggestions() {
     if(!dl) return;
     dl.innerHTML = allBranches.map(b=>`<option value="${b}">`).join('');
   });
+  // Also populate branch email suggestions for emailTo field
+  const emails = getBranchEmails();
+  const dl2 = document.getElementById('branch-email-suggestions');
+  if(dl2) dl2.innerHTML = Object.entries(emails).map(([branch,email])=>`<option value="${email}" label="${branch} — ${email}">`).join('');
+  // Populate customer email suggestions
+  const dl3 = document.getElementById('customer-email-suggestions');
+  if(dl3){
+    try{
+      const custs = JSON.parse(localStorage.getItem('nrj_customers')||'[]');
+      const custEmails = [...new Set(custs.map(c=>c.email).filter(e=>e&&e.includes('@')))].sort();
+      dl3.innerHTML = custEmails.map(e=>`<option value="${e}">`).join('');
+    }catch(e){}
+  }
 }
 
 function onBranchChange(prefix) {
