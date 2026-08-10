@@ -547,11 +547,6 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
           <div class="field span2"><label>Resident of (Village / Town)</label><input id="a-residentOf" autocomplete="new-password" name="a-residentOf-x" type="text" placeholder="e.g. Kaluad, Pune"></div>
           <div class="field span2"><label>Borrower Signature Name</label><input id="a-borrowerName" type="text" placeholder="e.g. N. Bhapker"></div>
           <div class="field span2"><label>Customer Email</label><input id="a-custEmail" type="email" placeholder="e.g. customer@gmail.com" list="customer-email-suggestions" autocomplete="off"><datalist id="customer-email-suggestions"></datalist></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">Appraiser &amp; Certificate Details</div>
         <div class="form-grid">
           <div class="field span2"><label>Appraiser Shop / Firm</label><input id="a-appraiserShop" type="text" value="NEW RAJLAXMI JEWELLERS" readonly></div>
           <div class="field span2"><label>Appraiser Address</label><input id="a-appraiserAddr" type="text" value="Main Market, Lohogaon, Pune – 411047" readonly></div>
@@ -2944,7 +2939,9 @@ function printInvoice(invId) {
         <div style="font-size:12px;font-weight:700">${inv.custName||'—'}</div>
         ${inv.custAddr?`<div style="font-size:10px;color:#333">${inv.custAddr}</div>`:''}
         ${inv.custMobile?`<div style="font-size:10px;color:#333">Ph: ${inv.custMobile}</div>`:''}
-        ${inv.custGstin?`<div style="font-size:10px;color:#333"><b>GSTIN:</b> ${inv.custGstin}</div>`:''}
+        <div style="font-size:10px;background:#e8f0ff;border-radius:4px;padding:2px 6px;display:inline-block;margin-top:2px">
+          <b style="color:#1a3a6b">GSTIN:</b> <span style="color:${inv.custGstin?'#1a3a6b':'#888'};font-weight:${inv.custGstin?'700':'400'}">${inv.custGstin||'Unregistered Consumer'}</span>
+        </div>
         <div style="font-size:10px;color:#333"><b>Place of Supply:</b> ${inv.custStateCode||'27'}-${(inv.custState||'MAHARASHTRA').toUpperCase()}</div>
       </div>
       <div style="padding:10px 16px">
@@ -3143,7 +3140,11 @@ function downloadInvoicePDF() {
   let byShift = y+10+custLines.length*4.5;
   if(inv.custAddr) { const al=doc.splitTextToSize(inv.custAddr,colW-6); doc.text(al,M+3,byShift); byShift+=al.length*3.5; }
   if(inv.custMobile) { doc.text('Ph: '+inv.custMobile, M+3, byShift); byShift+=3.5; }
-  if(inv.custGstin) { doc.setFont('helvetica','bold'); doc.text('GSTIN: '+inv.custGstin, M+3, byShift); doc.setFont('helvetica','normal'); byShift+=3.5; }
+  doc.setFillColor(232,240,255); doc.roundedRect(M+2,byShift-3,colW-4,5.5,1,1,'F');
+  doc.setTextColor(26,58,107); doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+  doc.text('GSTIN: '+(inv.custGstin||'Unregistered Consumer'), M+4, byShift+1);
+  doc.setFont('helvetica','normal'); doc.setTextColor(80,80,80); doc.setFontSize(8);
+  byShift+=6;
   doc.setTextColor(100,120,160);
   doc.text('Place of Supply: '+(inv.custStateCode||'27')+' - '+(inv.custState||'Maharashtra').toUpperCase(), M+3, byShift);
 
@@ -4125,7 +4126,8 @@ function aCollectFormData() {
     netLoan:    document.getElementById('a-netLoanAmt').value||'',
     loanDuration: document.getElementById('a-loanDuration')?.value||'',
     certDate:   fmtDate(document.getElementById('a-certDate').value),
-    recNo:      document.getElementById('a-recNo')?.value.trim()||''
+    recNo:      document.getElementById('a-recNo')?.value.trim()||'',
+    custEmail:  document.getElementById('a-custEmail')?.value||''
   };
 }
 
@@ -14720,6 +14722,8 @@ function autoInvoiceAfterCert(recId, d) {
     custName:    d.custName||'',
     custAddr:    d.residentOf||'',
     custMobile:  d.mobile||'',
+    custGstin:   d.custGstin||'',
+    custEmail:   d.custEmail||'',
     custState:   'Maharashtra',
     custStateCode:'27',
     gstType:     'cgst_sgst',
@@ -14783,6 +14787,7 @@ function autoInvoiceAfterSecondVerify(recId, d, marketValue) {
     custName:    d.custName||'',
     custAddr:    '',
     custMobile:  d.mobile||'',
+    custGstin:   d.custGstin||'',
     custState:   'Maharashtra',
     custStateCode:'27',
     gstType:     'cgst_sgst',
