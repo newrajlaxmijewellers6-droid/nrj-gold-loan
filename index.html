@@ -2306,6 +2306,68 @@ function saveMonthlyOpening() {
   _showToast?.(`✅ Opening balance of ₹${Math.abs(amount).toLocaleString('en-IN')} set for ${new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}`, '#0f766e');
 }
 
+function fixWrongInvoiceDates() {
+  const invs = getInvoices();
+  const today = new Date().toISOString().split('T')[0]; // 2026-08-10
+  const correctMM = today.slice(5,7); // 08
+  const wrongPrefix  = 'INV-' + today.slice(0,4) + '10-';
+  const rightPrefix  = 'INV-' + today.slice(0,4) + correctMM + '-';
+  const wrongDatePfx = today.slice(0,4) + '-10-' + today.slice(8,10); // 2026-10-10
+
+  let fixed = 0;
+  const updated = invs.map(inv => {
+    const createdToday = (inv.createdAt||'').startsWith(today);
+    const hasWrongDate = (inv.date||'').startsWith(wrongDatePfx);
+    const hasWrongNo   = (inv.no||'').startsWith(wrongPrefix);
+    if(createdToday && (hasWrongDate || hasWrongNo)) {
+      fixed++;
+      return {...inv,
+        date: hasWrongDate ? today : inv.date,
+        no:   hasWrongNo  ? inv.no.replace(wrongPrefix, rightPrefix) : inv.no
+      };
+    }
+    return inv;
+  });
+
+  if(!fixed){ alert('✅ No wrong-dated invoices found — all look correct.'); return; }
+  saveInvoices(updated);
+  if(typeof renderInvoices==='function') renderInvoices();
+  if(typeof renderRecords==='function')  renderRecords();
+  _showToast?.(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!`, '#166534');
+  alert(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!\n\nDate: October 10 → August 10\nInvoice No: INV-202610 → INV-202608`);
+}
+
+// ── Auto-fix invoices wrongly dated as October due to DD/MM/YYYY parse bug ──
+(function autoFixWrongInvoiceDates(){
+  try {
+    const invs = getInvoices();
+    const today = new Date().toISOString().split('T')[0]; // e.g. 2026-08-10
+    const correctMM   = today.slice(5,7);                  // 08
+    const wrongPrefix = 'INV-' + today.slice(0,4) + '10-';
+    const rightPrefix = 'INV-' + today.slice(0,4) + correctMM + '-';
+    const wrongDatePfx= today.slice(0,4) + '-10-' + today.slice(8,10); // 2026-10-10
+
+    let fixed = 0;
+    const updated = invs.map(inv => {
+      const createdToday = (inv.createdAt||'').startsWith(today);
+      const hasWrongDate = (inv.date||'').startsWith(wrongDatePfx);
+      const hasWrongNo   = (inv.no||'').startsWith(wrongPrefix);
+      if(createdToday && (hasWrongDate || hasWrongNo)){
+        fixed++;
+        return {...inv,
+          date: hasWrongDate ? today : inv.date,
+          no:   hasWrongNo   ? inv.no.replace(wrongPrefix, rightPrefix) : inv.no
+        };
+      }
+      return inv;
+    });
+    if(fixed > 0){
+      saveInvoices(updated);
+      console.log(`[NRJ] Auto-fixed ${fixed} invoice(s) with wrong October date → corrected to August`);
+    }
+  } catch(e){ console.warn('[NRJ] autoFixWrongInvoiceDates error:', e); }
+})();
+
 function toggleRecFilter() {
   const wrap = document.getElementById('rec-period-tabs-wrap');
   const btn  = document.getElementById('rec-filter-toggle');
