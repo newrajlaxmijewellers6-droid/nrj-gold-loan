@@ -14,7 +14,7 @@ function truncNet(val) {
 
     // Auto-refresh: check if GitHub has newer version, reload if yes
     (function(){
-      var APP_VERSION = '20260810_v12';
+      var APP_VERSION = '20260810_v13';
       var stored = sessionStorage.getItem('nrj_version');
       if(!stored) {
         // First load this session — save version and continue
@@ -2325,61 +2325,9 @@ function saveMonthlyOpening() {
   _showToast?.(`✅ Opening balance of ₹${Math.abs(amount).toLocaleString('en-IN')} set for ${new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'})}`, '#0f766e');
 }
 
-function fixWrongInvoiceDates() {
-  const invs = getInvoices();
-  const today = new Date().toISOString().split('T')[0]; // 2026-08-10
-  const correctMM = today.slice(5,7); // 08
-  const wrongPrefix  = 'INV-' + today.slice(0,4) + '10-';
-  const rightPrefix  = 'INV-' + today.slice(0,4) + correctMM + '-';
-  const wrongDatePfx = today.slice(0,4) + '-10-' + today.slice(8,10); // 2026-10-10
 
-  let fixed = 0;
-  const updated = invs.map(inv => {
-    const createdToday = (inv.createdAt||'').startsWith(today);
-    const hasWrongDate = (inv.date||'').startsWith(wrongDatePfx);
-    const hasWrongNo   = (inv.no||'').startsWith(wrongPrefix);
-    if(createdToday && (hasWrongDate || hasWrongNo)) {
-      fixed++;
-      return {...inv,
-        date: hasWrongDate ? today : inv.date,
-        no:   hasWrongNo  ? inv.no.replace(wrongPrefix, rightPrefix) : inv.no
-      };
-    }
-    return inv;
-  });
 
-  if(!fixed){ alert('✅ No wrong-dated invoices found — all look correct.'); return; }
-  saveInvoices(updated);
-  if(typeof renderInvoices==='function') renderInvoices();
-  if(typeof renderRecords==='function')  renderRecords();
-  _showToast?.(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!`, '#166534');
-  alert(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!\n\nDate: October 10 → August 10\nInvoice No: INV-202610 → INV-202608`);
-}
-
-// ── Auto-fix invoices wrongly dated as October due to DD/MM/YYYY parse bug ──
-(function autoFixWrongInvoiceDates(){
-  try {
-    const invs = getInvoices();
-    const todayStr = new Date().toISOString().split('T')[0];
-    const thisYear = todayStr.slice(0,4);
-    const correctMM = todayStr.slice(5,7);
-    let fixed = 0;
-    const updated = invs.map(inv => {
-      const createdToday = (inv.createdAt||'').startsWith(todayStr);
-      if(createdToday && (inv.date||'').startsWith(`${thisYear}-10-`)){
-        const wrongDay = (inv.date||'').slice(8,10);
-        const corrected = `${thisYear}-${wrongDay.padStart(2,'0')}-${(inv.date||'').slice(5,7).padStart(2,'0')}`;
-        if(!isNaN(new Date(corrected).getTime()) && corrected <= todayStr){
-          fixed++;
-          const fixedNo = (inv.no||'').replace(`INV-${thisYear}10-`,`INV-${thisYear}${correctMM}-`);
-          return {...inv, date: corrected, no: fixedNo};
-        }
-      }
-      return inv;
-    });
-    if(fixed > 0) { saveInvoices(updated); console.log(`[NRJ] Fixed ${fixed} invoice(s)`); }
-  } catch(e){ console.warn('[NRJ] autoFix error:', e); }
-})();
+// [auto-fix removed for stability]
 
 function toggleRecFilter() {
   const wrap = document.getElementById('rec-period-tabs-wrap');
