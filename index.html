@@ -514,7 +514,10 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
         <div class="card-title">Bank Details</div>
         <div class="form-grid">
           <div class="field span2"><label>Bank Name</label><input id="a-bankName" type="text" value="State Bank of India"></div>
-          <div class="field span2"><label>Branch Name</label><input id="a-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('a')" list="branch-suggestions-a" autocomplete="off"><datalist id="branch-suggestions-a"></datalist></div>
+          <div class="field span2" style="position:relative"><label>Branch Name</label>
+            <input id="a-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('a');showBranchDropdown('a')" onfocus="showBranchDropdown('a')" autocomplete="off" style="width:100%">
+            <div id="a-branch-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1.5px solid #1a3a6b;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.15)"></div>
+          </div>
           <div class="field"><label>Customer Mobile No.</label><input id="a-mobile" type="tel" autocomplete="new-password" name="a-mobile-x" placeholder="e.g. 8600149960" autocomplete="off"></div>
           <div class="field"><label>Account Number (S/A)</label>
             <input id="a-accNo" autocomplete="new-password" name="a-accNo-x" type="text" placeholder="e.g. 67890123456" autocomplete="off">
@@ -762,7 +765,10 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
       <div class="card">
         <div class="card-title">Bank &amp; Branch Details</div>
         <div class="form-grid">
-          <div class="field span2"><label>Branch Name</label><input id="b-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('b')" list="branch-suggestions-b" autocomplete="off"><datalist id="branch-suggestions-b"></datalist></div>
+          <div class="field span2" style="position:relative"><label>Branch Name</label>
+            <input id="b-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('b');showBranchDropdown('b')" onfocus="showBranchDropdown('b')" autocomplete="off" style="width:100%">
+            <div id="b-branch-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1.5px solid #1a3a6b;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.15)"></div>
+          </div>
           <div class="field"><label>Cash-in-Charge Officer (Sri/Smt)</label><input id="b-cashIncharge" type="text" placeholder="Officer name"></div>
           <div class="field"><label>Joint Custody Officer (Sri/Smt)</label><input id="b-jointCustody" type="text" placeholder="Joint custody officer name"></div>
         </div>
@@ -1498,9 +1504,9 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
       📧 Branch email auto-filled from your directory
     </div>
     <div class="email-note"><b>Steps:</b> 1. Tap <b>"⬇ Download PDF"</b> → 2. Tap <b>"📧 Open Gmail"</b> → 3. Attach PDF → Send!</div>
-    <div class="email-field"><label>To (Branch Email) <span style="color:#b91c1c">*Required</span></label>
-      <input id="emailTo" type="email" placeholder="officer@sbi.co.in" style="border:2px solid #1a3a6b;font-size:14px;font-weight:700" list="branch-email-suggestions" autocomplete="off">
-      <datalist id="branch-email-suggestions"></datalist>
+    <div class="email-field" style="position:relative"><label>To (Branch Email) <span style="color:#b91c1c">*Required</span></label>
+      <input id="emailTo" type="email" placeholder="officer@sbi.co.in" style="border:2px solid #1a3a6b;font-size:14px;font-weight:700;width:100%" onfocus="showEmailDropdown()" oninput="showEmailDropdown()" autocomplete="off">
+      <div id="email-to-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#fff;border:1.5px solid #1a3a6b;border-radius:0 0 8px 8px;max-height:200px;overflow-y:auto;box-shadow:0 4px 16px rgba(0,0,0,.15)"></div>
     </div>
     <div class="email-field"><label>Subject</label><input id="emailSubject" type="text"></div>
     <div class="email-field"><label>Message</label><textarea id="emailBody" rows="5"></textarea></div>
@@ -8523,16 +8529,11 @@ function getBranchOfficer(branchName) {
 
 // Called when branch name changes
 function populateBranchSuggestions() {
-  const branches = Object.keys(getBranchEmails());
-  const officers = Object.keys(getBranchOfficers());
-  const allBranches = [...new Set([...branches, ...officers])].sort();
-  ['branch-suggestions-a','branch-suggestions-b'].forEach(id=>{
-    const dl = document.getElementById(id);
-    if(!dl) return;
-    dl.innerHTML = allBranches.map(b=>`<option value="${b}">`).join('');
-  });
-  // Also populate branch email suggestions for emailTo field
   const emails = getBranchEmails();
+  const officers = getBranchOfficers();
+  const allBranches = [...new Set([...Object.keys(emails), ...Object.keys(officers)])].sort();
+  window._allBranches = allBranches;
+  // Populate branch email suggestions for emailTo field
   const dl2 = document.getElementById('branch-email-suggestions');
   if(dl2) dl2.innerHTML = Object.entries(emails).map(([branch,email])=>`<option value="${email}" label="${branch} — ${email}">`).join('');
   // Populate customer email suggestions
@@ -8544,6 +8545,59 @@ function populateBranchSuggestions() {
       dl3.innerHTML = custEmails.map(e=>`<option value="${e}">`).join('');
     }catch(e){}
   }
+}
+
+function showEmailDropdown() {
+  const input = document.getElementById('emailTo');
+  const dropdown = document.getElementById('email-to-dropdown');
+  if(!input || !dropdown) return;
+  const emails = getBranchEmails();
+  const q = input.value.trim().toLowerCase();
+  const entries = Object.entries(emails).filter(([branch, email])=>
+    !q || branch.toLowerCase().includes(q) || email.toLowerCase().includes(q)
+  );
+  if(!entries.length){ dropdown.style.display='none'; return; }
+  dropdown.innerHTML = entries.map(([branch, email])=>`
+    <div onclick="selectEmail('${email}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #eee"
+      onmouseover="this.style.background='#f0f5ff'" onmouseout="this.style.background=''">
+      <div style="font-size:12px;font-weight:700;color:#1a3a6b">🏛 ${branch}</div>
+      <div style="font-size:11px;color:#555">📧 ${email}</div>
+    </div>
+  `).join('');
+  dropdown.style.display='block';
+  setTimeout(()=>{ document.addEventListener('click', function _close(e){ if(!dropdown.contains(e.target)&&e.target!==input){ dropdown.style.display='none'; document.removeEventListener('click',_close); } }); }, 100);
+}
+
+function selectEmail(email) {
+  const input = document.getElementById('emailTo');
+  const dropdown = document.getElementById('email-to-dropdown');
+  if(input) input.value = email;
+  if(dropdown) dropdown.style.display='none';
+}
+
+function showBranchDropdown(prefix) {
+  const input = document.getElementById(prefix+'-branch');
+  const dropdown = document.getElementById(prefix+'-branch-dropdown');
+  if(!input || !dropdown) return;
+  const branches = window._allBranches || Object.keys(getBranchEmails()).concat(Object.keys(getBranchOfficers()));
+  const q = input.value.trim().toUpperCase();
+  const filtered = q ? branches.filter(b=>b.toUpperCase().includes(q)) : branches;
+  if(!filtered.length){ dropdown.style.display='none'; return; }
+  dropdown.innerHTML = filtered.map(b=>`
+    <div onclick="selectBranch('${prefix}','${b}')" style="padding:10px 14px;cursor:pointer;font-size:13px;border-bottom:1px solid #eee;color:#1a3a6b;font-weight:600"
+      onmouseover="this.style.background='#f0f5ff'" onmouseout="this.style.background=''">🏛 ${b}</div>
+  `).join('');
+  dropdown.style.display='block';
+  // Close on outside click
+  setTimeout(()=>{ document.addEventListener('click', function _close(e){ if(!dropdown.contains(e.target)&&e.target!==input){ dropdown.style.display='none'; document.removeEventListener('click',_close); } }); }, 100);
+}
+
+function selectBranch(prefix, branch) {
+  const input = document.getElementById(prefix+'-branch');
+  const dropdown = document.getElementById(prefix+'-branch-dropdown');
+  if(input) input.value = branch;
+  if(dropdown) dropdown.style.display = 'none';
+  onBranchChange(prefix);
 }
 
 function onBranchChange(prefix) {
