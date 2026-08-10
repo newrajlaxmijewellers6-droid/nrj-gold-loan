@@ -514,7 +514,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
         <div class="card-title">Bank Details</div>
         <div class="form-grid">
           <div class="field span2"><label>Bank Name</label><input id="a-bankName" type="text" value="State Bank of India"></div>
-          <div class="field span2"><label>Branch Name</label><input id="a-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('a')"></div>
+          <div class="field span2"><label>Branch Name</label><input id="a-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('a')" list="branch-suggestions-a" autocomplete="off"><datalist id="branch-suggestions-a"></datalist></div>
           <div class="field"><label>Customer Mobile No.</label><input id="a-mobile" type="tel" autocomplete="new-password" name="a-mobile-x" placeholder="e.g. 8600149960" autocomplete="off"></div>
           <div class="field"><label>Account Number (S/A)</label>
             <input id="a-accNo" autocomplete="new-password" name="a-accNo-x" type="text" placeholder="e.g. 67890123456" autocomplete="off">
@@ -762,7 +762,7 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
       <div class="card">
         <div class="card-title">Bank &amp; Branch Details</div>
         <div class="form-grid">
-          <div class="field span2"><label>Branch Name</label><input id="b-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('b')"></div>
+          <div class="field span2"><label>Branch Name</label><input id="b-branch" type="text" placeholder="e.g. Dhanori Branch" oninput="onBranchChange('b')" list="branch-suggestions-b" autocomplete="off"><datalist id="branch-suggestions-b"></datalist></div>
           <div class="field"><label>Cash-in-Charge Officer (Sri/Smt)</label><input id="b-cashIncharge" type="text" placeholder="Officer name"></div>
           <div class="field"><label>Joint Custody Officer (Sri/Smt)</label><input id="b-jointCustody" type="text" placeholder="Joint custody officer name"></div>
         </div>
@@ -1711,6 +1711,7 @@ function _doSwitchReport(report, el) {
   if(document.getElementById('report-purchase'))  document.getElementById('report-purchase').style.display  = 'none';
   document.getElementById('report-pl61i').style.display    = report==='pl61i'    ?'block':'none';
   document.getElementById('report-pl61iii').style.display  = report==='pl61iii'  ?'block':'none';
+  if(report==='pl61i'||report==='pl61iii') setTimeout(populateBranchSuggestions, 100);
   document.getElementById('report-records').style.display  = report==='records'  ?'block':'none';
   document.getElementById('report-customers').style.display= report==='customers'?'block':'none';
   document.getElementById('report-invoices').style.display = report==='invoices' ?'block':'none';
@@ -6563,6 +6564,7 @@ function initLoanFirebase(cfg){
         // Refresh whichever panel is currently visible
         const cr=window.currentReport||'';
         if(cr==='pl61i'||cr==='pl61iii'||cr==='records'||cr==='')safeCall('renderRecords');
+        if(cr==='pl61i'||cr==='pl61iii') safeCall('populateBranchSuggestions');
         if(cr==='customers') safeCall('renderCustomers');
         if(cr==='invoices')  safeCall('renderInvoices');
         if(cr==='payments')     safeCall('renderPayments');
@@ -8418,12 +8420,14 @@ function getBranchEmail(branchName) {
     if(bClean.includes(kClean) && kClean.length>=4) return v;
     if(kClean.includes(bClean) && bClean.length>=4) return v;
   }
-  // 3. Default partial match (only if no saved match)
+  // 3. Default partial match — only match if very similar length (prevents KHARADI matching WTC KHARADI)
   for(const [k,v] of Object.entries(emails)) {
     const kClean = clean(k);
-    if(kClean===bClean) continue; // already tried
-    if(bClean.includes(kClean) && kClean.length>=6) return v;
-    if(kClean.includes(bClean) && bClean.length>=6) return v;
+    if(kClean===bClean) continue; // already tried exact
+    // Only partial match if they share the same root word (e.g. DHANORI BRANCH vs DHANORI)
+    if(kClean.length>=6 && bClean.length>=6 && Math.abs(kClean.length-bClean.length)<=3) {
+      if(bClean.includes(kClean) || kClean.includes(bClean)) return v;
+    }
   }
   return '';
 }
@@ -8517,6 +8521,17 @@ function getBranchOfficer(branchName) {
 }
 
 // Called when branch name changes
+function populateBranchSuggestions() {
+  const branches = Object.keys(getBranchEmails());
+  const officers = Object.keys(getBranchOfficers());
+  const allBranches = [...new Set([...branches, ...officers])].sort();
+  ['branch-suggestions-a','branch-suggestions-b'].forEach(id=>{
+    const dl = document.getElementById(id);
+    if(!dl) return;
+    dl.innerHTML = allBranches.map(b=>`<option value="${b}">`).join('');
+  });
+}
+
 function onBranchChange(prefix) {
   const branchEl = document.getElementById(prefix+'-branch');
   if(!branchEl) return;
@@ -8532,6 +8547,15 @@ function onBranchChange(prefix) {
       setTimeout(()=>{ el.style.background=''; el.style.borderColor=''; }, 2000);
     }
   };
+
+  // ── Scroll to next empty required field below branch ──
+  setTimeout(()=>{
+    const fields = prefix==='a'
+      ? ['a-custName','a-swdOf','a-residentOf','a-mobile','a-accNo','a-cashIC','a-certDate','a-place']
+      : ['b-custName','b-branch','b-loanAccNo','b-cashIncharge','b-jointCustody','b-certDate','b-place'];
+    const nextEmpty = fields.map(id=>document.getElementById(id)).find(el=>el&&!el.value.trim());
+    if(nextEmpty) nextEmpty.scrollIntoView({behavior:'smooth', block:'center'});
+  }, 300);
 
   // ── 1. Branch email hint ──
   const email = getBranchEmail(branch);
