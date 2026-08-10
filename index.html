@@ -1942,25 +1942,35 @@ function getInvoiceStatus(inv) {
 }
 
 function nextInvoiceNo(forDate) {
+  // Parse date safely — handles YYYY-MM-DD, DD/MM/YYYY, Date object
   let d;
-  if(forDate) {
-    // If date is in DD/MM/YYYY format, convert to YYYY-MM-DD first
-    if(typeof forDate==='string' && forDate.includes('/')) {
-      const p = forDate.split('/');
+  try {
+    if(!forDate) { d = new Date(); }
+    else if(forDate instanceof Date) { d = forDate; }
+    else if(typeof forDate==='string' && forDate.includes('/')) {
+      const p = forDate.trim().split('/');
+      // DD/MM/YYYY → YYYY-MM-DD
       d = p.length===3 ? new Date(`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`) : new Date();
     } else {
       d = new Date(forDate);
     }
-  } else { d = new Date(); }
+    if(isNaN(d.getTime())) d = new Date();
+  } catch(e) { d = new Date(); }
+
   const yyyy = d.getFullYear();
-  const mm = String(d.getMonth()+1).padStart(2,'0');
-  const prefix = 'INV-' + yyyy + mm + '-';
+  const mm   = String(d.getMonth()+1).padStart(2,'0');
+  const prefix = `INV-${yyyy}${mm}-`;
+
+  // Find highest existing number for this month
   const invs = getInvoices();
-  const nums = invs
-    .filter(i => String(i.no||'').startsWith(prefix))
-    .map(i => { const m = String(i.no||'').match(/(\d+)$/); return m ? parseInt(m[1]) : 0; });
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return prefix + String(next).padStart(3,'0');
+  const monthNums = invs
+    .map(i => String(i.no||''))
+    .filter(no => no.startsWith(prefix))
+    .map(no => { const m = no.match(/-(\d+)$/); return m ? parseInt(m[1],10) : 0; })
+    .filter(n => !isNaN(n));
+
+  const next = monthNums.length ? Math.max(...monthNums) + 1 : 1;
+  return `${prefix}${String(next).padStart(3,'0')}`;
 }
 
 function autoUpdateInvNo() {
