@@ -2191,10 +2191,24 @@ function editInvoice(id) {
   document.querySelector('#invoiceModal .inv-title').innerHTML = '✏️ Edit Invoice';
   document.getElementById('inv-save-btn').textContent = '💾 Update Invoice';
 
+  // Auto-correct wrong October date before loading into edit form
+  let invDate = inv.date||'';
+  let invNo   = inv.no||'';
+  const todayStr  = new Date().toISOString().split('T')[0];
+  const thisYear  = todayStr.slice(0,4);
+  if(invDate.startsWith(`${thisYear}-10-`) && (inv.createdAt||'').startsWith(todayStr)){
+    const wrongDay = invDate.slice(8,10); // was originally the month
+    const corrected = `${thisYear}-${wrongDay.padStart(2,'0')}-${invDate.slice(5,7).padStart(2,'0')}`;
+    if(!isNaN(new Date(corrected).getTime()) && corrected <= todayStr){
+      invDate = corrected;
+      invNo   = invNo.replace(`INV-${thisYear}10-`, `INV-${thisYear}${wrongDay}-`);
+    }
+  }
+
   // Fill all fields
   const setVal = (elId, v) => { const el=document.getElementById(elId); if(el) el.value=v||''; };
-  setVal('inv-no',           inv.no);
-  setVal('inv-date',         inv.date);
+  setVal('inv-no',           invNo);
+  setVal('inv-date',         invDate);
   const discEl=document.getElementById('inv-discount'); if(discEl) discEl.value=inv.discount||0;
   setVal('inv-custName',     inv.custName);
   setVal('inv-custAddr',     inv.custAddr);
@@ -2347,34 +2361,55 @@ function fixWrongInvoiceDates() {
   alert(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!\n\nDate: October 10 → August 10\nInvoice No: INV-202610 → INV-202608`);
 }
 
-// ── Auto-fix invoices wrongly dated as October due to DD/MM/YYYY parse bug ──
+// ── Auto-fix invoices wrongly dated as October + renumber sequentially ──
 (function autoFixWrongInvoiceDates(){
   try {
-    const invs = getInvoices();
-    const today = new Date().toISOString().split('T')[0]; // e.g. 2026-08-10
-    const correctMM   = today.slice(5,7);                  // 08
-    const wrongPrefix = 'INV-' + today.slice(0,4) + '10-';
-    const rightPrefix = 'INV-' + today.slice(0,4) + correctMM + '-';
-    const wrongDatePfx= today.slice(0,4) + '-10-' + today.slice(8,10); // 2026-10-10
+    let invs = getInvoices();
+    const todayStr  = new Date().toISOString().split('T')[0]; // 2026-08-10
+    const thisYear  = todayStr.slice(0,4);                    // 2026
 
+    // Step 1: Fix wrong October dates
     let fixed = 0;
-    const updated = invs.map(inv => {
-      const createdToday = (inv.createdAt||'').startsWith(today);
-      const hasWrongDate = (inv.date||'').startsWith(wrongDatePfx);
-      const hasWrongNo   = (inv.no||'').startsWith(wrongPrefix);
-      if(createdToday && (hasWrongDate || hasWrongNo)){
-        fixed++;
-        return {...inv,
-          date: hasWrongDate ? today : inv.date,
-          no:   hasWrongNo   ? inv.no.replace(wrongPrefix, rightPrefix) : inv.no
-        };
+    invs = invs.map(inv => {
+      const createdToday = (inv.createdAt||'').startsWith(todayStr);
+      if(createdToday && (inv.date||'').startsWith(`${thisYear}-10-`)){
+        const wrongDay = (inv.date||'').slice(8,10); // e.g. "08" — was the original month
+        const corrected = `${thisYear}-${wrongDay.padStart(2,'0')}-${(inv.date||'').slice(5,7).padStart(2,'0')}`;
+        if(!isNaN(new Date(corrected).getTime()) && corrected <= todayStr){
+          fixed++;
+          return {...inv, date: corrected};
+        }
       }
       return inv;
     });
-    if(fixed > 0){
-      saveInvoices(updated);
-      console.log(`[NRJ] Auto-fixed ${fixed} invoice(s) with wrong October date → corrected to August`);
-    }
+
+    if(fixed === 0) return; // Nothing to fix
+
+    // Step 2: Group by YYYYMM and renumber each month sequentially by date+createdAt
+    const byMonth = {};
+    invs.forEach(inv => {
+      const d = inv.date||inv.createdAt||todayStr;
+      const key = d.slice(0,7).replace('-',''); // YYYYMM
+      if(!byMonth[key]) byMonth[key] = [];
+      byMonth[key].push(inv);
+    });
+
+    const renumbered = [];
+    Object.entries(byMonth).forEach(([ym, monthInvs]) => {
+      // Sort by date then createdAt for stable ordering
+      monthInvs.sort((a,b)=>{
+        const da=(a.date||a.createdAt||'').localeCompare(b.date||b.createdAt||'');
+        if(da!==0) return da;
+        return (a.createdAt||'').localeCompare(b.createdAt||'');
+      });
+      monthInvs.forEach((inv,idx)=>{
+        const prefix = `INV-${ym.slice(0,4)}${ym.slice(4,6)}-`;
+        renumbered.push({...inv, no: prefix + String(idx+1).padStart(3,'0')});
+      });
+    });
+
+    saveInvoices(renumbered);
+    console.log(`[NRJ] Fixed ${fixed} invoice date(s) and renumbered all invoices sequentially`);
   } catch(e){ console.warn('[NRJ] autoFixWrongInvoiceDates error:', e); }
 })();
 
