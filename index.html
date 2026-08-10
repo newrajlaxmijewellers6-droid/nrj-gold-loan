@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23d4a017'/><text y='.9em' font-size='75' x='10'>💍</text></svg>">
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
@@ -13,7 +14,7 @@ function truncNet(val) {
 
     // Auto-refresh: check if GitHub has newer version, reload if yes
     (function(){
-      var APP_VERSION = '20260807_v9';
+      var APP_VERSION = '20260810_v11';
       var stored = sessionStorage.getItem('nrj_version');
       if(!stored) {
         // First load this session — save version and continue
@@ -4024,6 +4025,24 @@ function aGenerateCert() {
   const badItems=items.filter(r=>!(r.gw>0)||!(r.net>0));
   if(badItems.length)          aErrs.push('Item Gross Weight & Net Weight must be filled for all items');
   if(aErrs.length){
+    // Scroll to first missing field
+    const firstMissing = [
+      {check:!d.custName.trim(),  id:'a-custName'},
+      {check:!d.branch.trim(),    id:'a-branch'},
+      {check:!d.mobile.trim(),    id:'a-mobile'},
+      {check:!d.accNo.trim(),     id:'a-accNo'},
+      {check:!d.residentOf.trim(),id:'a-residentOf'},
+      {check:!d.place.trim(),     id:'a-place'},
+      {check:!d.certDate,         id:'a-certDate'},
+      {check:!d.appName.trim(),   id:'a-appraiserName'},
+      {check:!d.cashIC.trim(),    id:'a-cashIC'},
+      {check:!d.rate24k||d.rate24k<=0, id:'a-rate24k'},
+      {check:!d.netLoan,          id:'a-netLoan'},
+    ].find(f=>f.check);
+    if(firstMissing){
+      const el=document.getElementById(firstMissing.id);
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.borderColor='#b91c1c';setTimeout(()=>el.style.borderColor='',3000);}
+    }
     alert('⚠️ Form Incomplete — Cannot Generate!\n\nPlease fill these required fields:\n\n'+aErrs.map((e,i)=>`  ${i+1}. ${e}`).join('\n'));
     return;
   }
@@ -4306,6 +4325,21 @@ function bGenerateCert(){
   const badItemsB=items.filter(r=>!(r.gw>0)||!(r.net>0));
   if(badItemsB.length)          bErrs.push('Item Gross Weight & Net Weight must be filled for all items');
   if(bErrs.length){
+    const firstMissingB = [
+      {check:!d.custName.trim(),       id:'b-custName'},
+      {check:!d.branch.trim(),         id:'b-branch'},
+      {check:!d.certDate,              id:'b-certDate'},
+      {check:!d.firstAppraiser.trim(), id:'b-firstAppraiser'},
+      {check:!d.appName.trim(),        id:'b-appraiserName'},
+      {check:!d.cashIncharge.trim(),   id:'b-cashIncharge'},
+      {check:!d.jointCustody.trim(),   id:'b-jointCustody'},
+      {check:!d.place.trim(),          id:'b-place'},
+      {check:!d.rate24k||d.rate24k<=0,id:'b-rate24k'},
+    ].find(f=>f.check);
+    if(firstMissingB){
+      const el=document.getElementById(firstMissingB.id);
+      if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.style.borderColor='#b91c1c';setTimeout(()=>el.style.borderColor='',3000);}
+    }
     alert('⚠️ Form Incomplete — Cannot Generate!\n\nPlease fill these required fields:\n\n'+bErrs.map((e,i)=>`  ${i+1}. ${e}`).join('\n'));
     return;
   }
@@ -4439,6 +4473,19 @@ function bGenerateCert(){
 
   document.getElementById('emailSubject').value=`SBI Gold Loan – Second Verification Certificate – A/c ${d.loanAccNo}`;
   document.getElementById('emailBody').value=`Dear Sir/Madam,\n\nPlease find attached the Second Verification Certificate (Annexure PL-61(iii)) for the gold loan.\n\nGold Loan A/c No.: ${d.loanAccNo}\nLedger Folio No.: ${d.ledgerFolio}\nBranch: State Bank of India – ${d.branch}\nDate: ${d.certDate}\nTotal Market Value: Rs.${Math.round(tMV).toLocaleString('en-IN')}/-\n\nRegards,\n${JEWELLER.name}\n${JEWELLER.phone}`;
+  // Auto-fill branch email for PL-61(iii)
+  const _bBranchEmail = getBranchEmail(d.branch||'');
+  if(document.getElementById('emailTo')) document.getElementById('emailTo').value = _bBranchEmail || '';
+  const _bNote = document.getElementById('email-branch-note');
+  if(_bNote){
+    if(_bBranchEmail){
+      _bNote.style.display='block';
+      _bNote.textContent='📧 Branch email auto-filled: '+_bBranchEmail+' ('+d.branch+')';
+    } else {
+      _bNote.style.display='none';
+      if(d.branch) _showToast('⚠️ No branch email found for "'+d.branch+'". Add it in Settings → Branch Email Directory.','#b8860b');
+    }
+  }
   // Safety net — ensure recNo is never blank when saving
   if(!d.recNo) {
     d.recNo = generateNextRecNo_B() || ('GL-'+String(Date.now()).slice(-4));
@@ -8332,6 +8379,7 @@ function getBranchEmails() {
       'VIMAN NAGAR':    'sbi.vimannagar@sbi.co.in',
       'HADAPSAR':       'sbi.hadapsar@sbi.co.in',
       'KHARADI':        'sbi.kharadi@sbi.co.in',
+      'WTC KHARADI':    'sbi.wtckharadi@sbi.co.in',
       'WADGAON SHERI':  'sbi.wadgaonsheri@sbi.co.in',
       'NAGAR ROAD':     'sbi.nagarroad@sbi.co.in',
       'SASANE NAGAR':   'sbi.sasanenagar@sbi.co.in',
@@ -8359,11 +8407,23 @@ function getBranchEmail(branchName) {
   const emails = getBranchEmails();
   const clean = s => s.trim().toUpperCase().replace(/\s*BRANCH\s*/gi,'').trim();
   const bClean = clean(branchName);
+  // 1. Exact match first
+  for(const [k,v] of Object.entries(emails)) {
+    if(clean(k)===bClean) return v;
+  }
+  // 2. Saved/custom entries take priority over partial match
+  const saved = JSON.parse(localStorage.getItem('nrj_branch_emails')||'{}');
+  for(const [k,v] of Object.entries(saved)) {
+    const kClean = clean(k);
+    if(bClean.includes(kClean) && kClean.length>=4) return v;
+    if(kClean.includes(bClean) && bClean.length>=4) return v;
+  }
+  // 3. Default partial match (only if no saved match)
   for(const [k,v] of Object.entries(emails)) {
     const kClean = clean(k);
-    if(kClean===bClean || bClean.includes(kClean) || kClean.includes(bClean)) {
-      return v;
-    }
+    if(kClean===bClean) continue; // already tried
+    if(bClean.includes(kClean) && kClean.length>=6) return v;
+    if(kClean.includes(bClean) && bClean.length>=6) return v;
   }
   return '';
 }
