@@ -14477,7 +14477,11 @@ function autoInvoiceAfterCert(recId, d) {
   if(!slabAmt) return;
 
   const loanAccNo  = (d.loanAccNo||d.accNo||'').trim();
-  const certDate   = d.certDate||new Date().toISOString().split('T')[0];
+  // certDate from form is in DD/MM/YYYY — convert to YYYY-MM-DD for invoice date
+  const rawCert    = d.certDate||'';
+  const certDate   = rawCert.includes('/')
+    ? (()=>{ const p=rawCert.split('/'); return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:new Date().toISOString().split('T')[0]; })()
+    : (rawCert||new Date().toISOString().split('T')[0]);
   const today      = new Date().toISOString().split('T')[0];
   const allInvs    = getInvoices();
 
@@ -14539,7 +14543,11 @@ function autoInvoiceAfterSecondVerify(recId, d, marketValue) {
   if(!slabAmt) return;
 
   const loanAccNo = (d.loanAccNo||'').trim();
-  const certDate  = d.certDate||new Date().toISOString().split('T')[0];
+  // certDate from form is in DD/MM/YYYY — convert to YYYY-MM-DD for invoice date
+  const rawCertB  = d.certDate||'';
+  const certDate  = rawCertB.includes('/')
+    ? (()=>{ const p=rawCertB.split('/'); return p.length===3?`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`:new Date().toISOString().split('T')[0]; })()
+    : (rawCertB||new Date().toISOString().split('T')[0]);
   const today     = new Date().toISOString().split('T')[0];
   const allInvs   = getInvoices();
 
