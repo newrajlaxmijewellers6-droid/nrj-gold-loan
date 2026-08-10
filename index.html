@@ -14,7 +14,7 @@ function truncNet(val) {
 
     // Auto-refresh: check if GitHub has newer version, reload if yes
     (function(){
-      var APP_VERSION = '20260810_v11';
+      var APP_VERSION = '20260810_v12';
       var stored = sessionStorage.getItem('nrj_version');
       if(!stored) {
         // First load this session — save version and continue
@@ -2356,56 +2356,29 @@ function fixWrongInvoiceDates() {
   alert(`✅ Fixed ${fixed} invoice${fixed>1?'s':''}!\n\nDate: October 10 → August 10\nInvoice No: INV-202610 → INV-202608`);
 }
 
-// ── Auto-fix invoices wrongly dated as October + renumber sequentially ──
+// ── Auto-fix invoices wrongly dated as October due to DD/MM/YYYY parse bug ──
 (function autoFixWrongInvoiceDates(){
   try {
-    let invs = getInvoices();
-    const todayStr  = new Date().toISOString().split('T')[0]; // 2026-08-10
-    const thisYear  = todayStr.slice(0,4);                    // 2026
-
-    // Step 1: Fix wrong October dates
+    const invs = getInvoices();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const thisYear = todayStr.slice(0,4);
+    const correctMM = todayStr.slice(5,7);
     let fixed = 0;
-    invs = invs.map(inv => {
+    const updated = invs.map(inv => {
       const createdToday = (inv.createdAt||'').startsWith(todayStr);
       if(createdToday && (inv.date||'').startsWith(`${thisYear}-10-`)){
-        const wrongDay = (inv.date||'').slice(8,10); // e.g. "08" — was the original month
+        const wrongDay = (inv.date||'').slice(8,10);
         const corrected = `${thisYear}-${wrongDay.padStart(2,'0')}-${(inv.date||'').slice(5,7).padStart(2,'0')}`;
         if(!isNaN(new Date(corrected).getTime()) && corrected <= todayStr){
           fixed++;
-          return {...inv, date: corrected};
+          const fixedNo = (inv.no||'').replace(`INV-${thisYear}10-`,`INV-${thisYear}${correctMM}-`);
+          return {...inv, date: corrected, no: fixedNo};
         }
       }
       return inv;
     });
-
-    if(fixed === 0) return; // Nothing to fix
-
-    // Step 2: Group by YYYYMM and renumber each month sequentially by date+createdAt
-    const byMonth = {};
-    invs.forEach(inv => {
-      const d = inv.date||inv.createdAt||todayStr;
-      const key = d.slice(0,7).replace('-',''); // YYYYMM
-      if(!byMonth[key]) byMonth[key] = [];
-      byMonth[key].push(inv);
-    });
-
-    const renumbered = [];
-    Object.entries(byMonth).forEach(([ym, monthInvs]) => {
-      // Sort by date then createdAt for stable ordering
-      monthInvs.sort((a,b)=>{
-        const da=(a.date||a.createdAt||'').localeCompare(b.date||b.createdAt||'');
-        if(da!==0) return da;
-        return (a.createdAt||'').localeCompare(b.createdAt||'');
-      });
-      monthInvs.forEach((inv,idx)=>{
-        const prefix = `INV-${ym.slice(0,4)}${ym.slice(4,6)}-`;
-        renumbered.push({...inv, no: prefix + String(idx+1).padStart(3,'0')});
-      });
-    });
-
-    saveInvoices(renumbered);
-    console.log(`[NRJ] Fixed ${fixed} invoice date(s) and renumbered all invoices sequentially`);
-  } catch(e){ console.warn('[NRJ] autoFixWrongInvoiceDates error:', e); }
+    if(fixed > 0) { saveInvoices(updated); console.log(`[NRJ] Fixed ${fixed} invoice(s)`); }
+  } catch(e){ console.warn('[NRJ] autoFix error:', e); }
 })();
 
 function toggleRecFilter() {
