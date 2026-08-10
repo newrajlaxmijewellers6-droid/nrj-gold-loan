@@ -1942,7 +1942,16 @@ function getInvoiceStatus(inv) {
 }
 
 function nextInvoiceNo(forDate) {
-  const d = forDate ? new Date(forDate) : new Date();
+  let d;
+  if(forDate) {
+    // If date is in DD/MM/YYYY format, convert to YYYY-MM-DD first
+    if(typeof forDate==='string' && forDate.includes('/')) {
+      const p = forDate.split('/');
+      d = p.length===3 ? new Date(`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`) : new Date();
+    } else {
+      d = new Date(forDate);
+    }
+  } else { d = new Date(); }
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth()+1).padStart(2,'0');
   const prefix = 'INV-' + yyyy + mm + '-';
