@@ -48,8 +48,9 @@ function truncNet(val) {
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
+html{overflow-x:hidden;max-width:100%}
 body{padding-top:84px !important}
-body{font-family:Arial,sans-serif;background:#f4f1eb;color:#1a1a1a;font-size:14px;-webkit-text-size-adjust:100%}
+body{font-family:Arial,sans-serif;background:#f4f1eb;color:#1a1a1a;font-size:14px;-webkit-text-size-adjust:100%;overflow-x:hidden;max-width:100vw}
 
 /* ── APP BAR ── */
 .app-bar{background:#1a3a6b;color:#fff;padding:6px 10px;display:flex;align-items:center;gap:8px;position:fixed;top:0;left:0;right:0;z-index:201;box-shadow:0 2px 8px rgba(0,0,0,.3);min-height:48px}
@@ -298,9 +299,9 @@ window.addEventListener('error', function(e){
 <!-- APP BAR -->
 <div class="app-bar">
   <div class="sbi-badge">SBI</div>
-  <div style="flex:1">
-    <h1>Gold Loan Certificate App — New Rajlaxmi Jewellers</h1>
-    <p>State Bank of India · Lohogaon, Pune</p>
+  <div style="flex:1;min-width:0">
+    <h1 style="overflow-wrap:break-word">Gold Loan Certificate App — New Rajlaxmi Jewellers</h1>
+    <p style="overflow-wrap:break-word">State Bank of India · Lohogaon, Pune</p>
   </div>
   <button onclick="hardRefreshApp()" title="Refresh" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0">🔄</button>
   <button onclick="doLogout()" id="logoutBtn" style="display:none;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;font-family:inherit;flex-shrink:0">Sign Out</button>
