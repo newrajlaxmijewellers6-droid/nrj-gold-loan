@@ -200,7 +200,9 @@ table.items-tbl td input:focus,table.items-tbl td select:focus{outline:none;bord
 .cert-info-table td{border:1px solid #000;padding:4px 7px;vertical-align:middle}
 .cert-info-table td:first-child{width:52%}
 .cert-body{margin-bottom:8px;text-align:justify;line-height:1.7;font-size:11px}
-.cert-header{display:flex;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px}
+.cert-header{display:flex;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:8px;min-width:0}
+.cert-header>div{min-width:0;overflow-wrap:break-word}
+@media(max-width:420px){.cert-header{flex-direction:column}.cert-header>div:last-child{text-align:left!important}}
 table.cert-table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:10px}
 table.cert-table th{border:1px solid #000;padding:4px;text-align:center;font-weight:bold;font-size:9.5px;background:#fff;vertical-align:middle}
 table.cert-table td{border:1px solid #000;padding:4px;vertical-align:middle;font-size:10px}
@@ -15164,10 +15166,15 @@ function updateGSSplitTotal() {
     }
   }
   try {
-    var obs = new MutationObserver(function(){ fitCertPreview(); });
+    var obs = new MutationObserver(function(){ requestAnimationFrame(function(){ requestAnimationFrame(fitCertPreview); }); });
+    var modalObs = new MutationObserver(function(){
+      requestAnimationFrame(function(){ requestAnimationFrame(fitCertPreview); });
+    });
     document.addEventListener('DOMContentLoaded', function(){
       var el = document.getElementById('cert-area');
       if(el) obs.observe(el, {childList:true});
+      var modal = document.getElementById('modal');
+      if(modal) modalObs.observe(modal, {attributes:true, attributeFilter:['class','style']});
     });
     window.addEventListener('resize', fitCertPreview);
   } catch(e) { console.error('cert preview auto-fit failed:', e); }
