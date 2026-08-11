@@ -4373,8 +4373,8 @@ function bGenerateCert(){
   certDataCache={items,d,type:'pl61iii'};
   let tGW=0,tNet=0,tMV=0,tQty=0;items.forEach(r=>{tGW+=r.tGW;tNet+=r.tNet;tMV+=r.tMV;tQty+=r.qty||1;});
 
-  const itemRowsHTML=items.map(r=>`<tr><td class="c">${r.sno}</td><td>${r.desc||'—'}${r.qty>1?' ('+r.qty+'pcs)':''}</td><td class="c">${pad(r.gw)}</td><td class="c">${r.sw>0?pad(r.sw):'—'}</td><td class="c">${r.purity} Ct</td><td class="c"><b>${pad(r.net)}</b></td><td class="r"><b>Rs.${Math.round(r.tMV).toLocaleString('en-IN')}/-</b></td></tr>`).join('');
-  const blankRows=Array(Math.max(0,5-items.length)).fill(`<tr><td class="c">&nbsp;</td><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>`).join('');
+  const itemRowsHTML=items.map(r=>`<tr><td class="c">${r.sno}</td><td>${r.desc||'—'}</td><td class="c">${r.qty||1}</td><td class="c">${pad(r.gw)}</td><td class="c">${r.sw>0?pad(r.sw):'—'}</td><td class="c">${r.purity} Ct</td><td class="c"><b>${pad(r.net)}</b></td><td class="r"><b>Rs.${Math.round(r.tMV).toLocaleString('en-IN')}/-</b></td></tr>`).join('');
+  const blankRows=Array(Math.max(0,5-items.length)).fill(`<tr><td class="c">&nbsp;</td><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join('');
   const uniqueCaratsB=[...new Set(items.map(r=>parseFloat(r.purity)||22))].sort((a,b)=>b-a);
   const mktRateLineB=d.rate24k?uniqueCaratsB.map(c=>`${c} Carat – Rs.${Math.floor(c/24*d.rate24k).toLocaleString('en-IN')}/g`).join('  |  '):'';
 
@@ -5167,8 +5167,8 @@ function renderCertB(items, d) {
   // Use same clean bank-format as bGenerateCert (no letterhead in preview)
   let tGW=0,tNet=0,tMV=0,tQty=0; items.forEach(r=>{tGW+=r.tGW;tNet+=r.tNet;tMV+=r.tMV;tQty+=(r.qty||1);});
   const pad=v=>v?v.toFixed(3):'—';
-  const itemRowsHTML=items.map(r=>`<tr><td class="c">${r.sno}</td><td>${r.desc||'—'}${r.qty>1?' ('+r.qty+'pcs)':''}</td><td class="c">${pad(r.gw)}</td><td class="c">${r.sw>0?pad(r.sw):'—'}</td><td class="c">${r.purity} Ct</td><td class="c"><b>${pad(r.net)}</b></td><td class="r"><b>Rs.${Math.round(r.tMV).toLocaleString('en-IN')}/-</b></td></tr>`).join('');
-  const blankRows=Array(Math.max(0,5-items.length)).fill(`<tr><td class="c">&nbsp;</td><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td></tr>`).join('');
+  const itemRowsHTML=items.map(r=>`<tr><td class="c">${r.sno}</td><td>${r.desc||'—'}</td><td class="c">${r.qty||1}</td><td class="c">${pad(r.gw)}</td><td class="c">${r.sw>0?pad(r.sw):'—'}</td><td class="c">${r.purity} Ct</td><td class="c"><b>${pad(r.net)}</b></td><td class="r"><b>Rs.${Math.round(r.tMV).toLocaleString('en-IN')}/-</b></td></tr>`).join('');
+  const blankRows=Array(Math.max(0,5-items.length)).fill(`<tr><td class="c">&nbsp;</td><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`).join('');
   const uniqueCarats=[...new Set(items.map(r=>parseFloat(r.purity)||22))].sort((a,b)=>b-a);
   const mktRateLineB=d.rate24k?uniqueCarats.map(c=>`${c} Carat – Rs.${Math.floor(c/24*d.rate24k).toLocaleString('en-IN')}/g`).join('  |  '):'';
   const methods=d.testMethods||[];
@@ -5188,13 +5188,13 @@ function renderCertB(items, d) {
       <div style="margin-bottom:8px">Madam/ Dear Sir,</div>
       <div style="margin-bottom:10px;text-align:justify;font-size:11.5px">I hereby certify that the ornaments/Coins of the above mentioned gold loan account have been weighted and appraised by me on<span style="border-bottom:1px solid #000;display:inline-block;min-width:80px;padding:0 4px"><b>${d.certDate||''}</b></span> in the presence of Sri/Smt. <span style="border-bottom:1px solid #000;display:inline-block;min-width:80px;padding:0 4px"><b>${d.cashIncharge||'…………………'}</b></span> (Cash in charge) and Sri/Smt.<span style="border-bottom:1px solid #000;display:inline-block;min-width:80px;padding:0 4px"><b>${d.jointCustody||'………………………'}</b></span> (Joint Custody Officer). The exact weight, purity of the metal and market value of each item as on date are indicated below:${mktRateLineB?`<br><b>Market rate: ${mktRateLineB}</b>`:''}</div>
       <table class="cert-table" style="font-size:10.5px"><thead><tr>
-        <th style="width:26px">Sl.<br>No.</th><th>Description of the Article</th>
+        <th style="width:26px">Sl.<br>No.</th><th>Description of the Article</th><th style="width:28px">Qty</th>
         <th style="width:44px">Gross<br>Wt.</th><th style="width:56px">Approx.<br>Stone Wt.<br>(Grams)</th>
         <th style="width:42px">Purity<br>(Carat)</th><th style="width:50px">Net Wt.<br>(Grams)</th>
         <th style="width:62px">Market<br>Value Rs.</th>
       </tr></thead><tbody>
         ${itemRowsHTML}${blankRows}
-        <tr class="total-row"><td></td><td><b>Total</b></td><td class="c"><b>${pad(tGW)}</b></td><td></td><td></td><td class="c"><b>${pad(tNet)}</b></td><td class="r"><b>Rs.${Math.round(tMV).toLocaleString('en-IN')}/-</b></td></tr>
+        <tr class="total-row"><td></td><td><b>Total</b></td><td class="c"><b>${tQty}</b></td><td class="c"><b>${pad(tGW)}</b></td><td></td><td></td><td class="c"><b>${pad(tNet)}</b></td><td class="r"><b>Rs.${Math.round(tMV).toLocaleString('en-IN')}/-</b></td></tr>
       </tbody></table>
       <div style="margin-top:10px;font-size:11px"><b>Method (s) used for purity testing:</b><br>${allMethods.map(m=>`<span style="margin-right:14px">${methods.includes(m)?'☑':'☐'} ${m}</span>`).join('')}<br>I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.</div>
       <div style="margin-top:8px;font-size:11px">Place: <span style="border-bottom:1px solid #000;min-width:80px;display:inline-block;padding:0 4px"><b>${d.place||''}</b></span>&nbsp;&nbsp;&nbsp;&nbsp;Date: <span style="border-bottom:1px solid #000;min-width:80px;display:inline-block;padding:0 4px"><b>${d.certDate||''}</b></span></div>
