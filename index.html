@@ -15130,5 +15130,47 @@ function updateGSSplitTotal() {
   </div>
 </div>
 
+<script>
+// ── AUTO-FIT CERTIFICATE/VALUATION PREVIEW ON MOBILE ──
+// Scales the certificate preview table down so it fits the screen width
+// without needing to scroll sideways, instead of just cutting it off.
+(function(){
+  function fitCertPreview(){
+    var outer = document.getElementById('cert-area');
+    if(!outer) return;
+    var inner = outer.querySelector(':scope > div.cert-scale-wrap');
+    if(!inner){
+      if(!outer.firstChild) return;
+      inner = document.createElement('div');
+      inner.className = 'cert-scale-wrap';
+      while(outer.firstChild) inner.appendChild(outer.firstChild);
+      outer.appendChild(inner);
+    }
+    inner.style.transform = 'none';
+    inner.style.width = 'auto';
+    outer.style.height = 'auto';
+    var availWidth = outer.clientWidth;
+    var naturalWidth = inner.scrollWidth;
+    if(availWidth > 0 && naturalWidth > availWidth + 1){
+      var scale = availWidth / naturalWidth;
+      inner.style.transformOrigin = 'top left';
+      inner.style.width = naturalWidth + 'px';
+      inner.style.transform = 'scale(' + scale + ')';
+      outer.style.height = Math.ceil(inner.scrollHeight * scale) + 'px';
+      outer.style.overflowX = 'hidden';
+    } else {
+      outer.style.overflowX = 'auto';
+    }
+  }
+  try {
+    var obs = new MutationObserver(function(){ fitCertPreview(); });
+    document.addEventListener('DOMContentLoaded', function(){
+      var el = document.getElementById('cert-area');
+      if(el) obs.observe(el, {childList:true});
+    });
+    window.addEventListener('resize', fitCertPreview);
+  } catch(e) { console.error('cert preview auto-fit failed:', e); }
+})();
+</script>
 </body>
 </html>
