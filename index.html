@@ -5014,7 +5014,31 @@ function _baseSaveRecords(recs) {
   // Single write path only — direct child write WITHOUT the debounced full-root push
   // (avoids race condition where two writes interleave and the listener re-syncs stale data)
   if(_loanFbRef) {
-    _loanFbRef.child('records').set(recs).catch(e=>console.error('Firebase save error:',e));
+    // Anti-data-loss guard: before overwriting the cloud's records list, check whether
+    // the cloud has any record (e.g. saved moments ago from another device/tab) that this
+    // local copy doesn't know about yet — if so, merge it back in instead of erasing it.
+    // Explicitly-deleted records (tombstones) are never resurrected this way.
+    _loanFbRef.child('records').once('value').then(snap=>{
+      const cloudVal = snap.val();
+      let cloudArr = [];
+      if(cloudVal) cloudArr = Array.isArray(cloudVal) ? cloudVal : Object.keys(cloudVal).sort((a,b)=>Number(a)-Number(b)).map(k=>cloudVal[k]);
+      let tomb = [];
+      try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]')).map(t=>t.id); } catch(e){}
+      const localIds = new Set(recs.map(r=>r.id));
+      const merged = recs.slice();
+      cloudArr.forEach(r=>{
+        if(r && !localIds.has(r.id) && !tomb.includes(r.id)) merged.push(r);
+      });
+      if(merged.length !== recs.length) {
+        localStorage.setItem('nrj_records', JSON.stringify(merged));
+        updateRecordsBadge();
+        if(document.getElementById('report-records')?.style.display !== 'none') renderRecords();
+      }
+      _loanFbRef.child('records').set(merged).catch(e=>console.error('Firebase save error:',e));
+    }).catch(e=>{
+      console.error('Firebase merge-check failed, saving as-is:', e);
+      _loanFbRef.child('records').set(recs).catch(e2=>console.error('Firebase save error:',e2));
+    });
   } else {
     // Offline — queue the debounced full sync for when connection returns
     pushLoanToCloud();
@@ -5042,7 +5066,11 @@ function saveRecord(data) {
     existing = recs.findIndex(r => r.id===window._editingRecordId);
   }
   if(existing<0 && recNo) {
-    existing = recs.findIndex(r => (r.d.recNo||'').trim()===recNo);
+    existing = recs.findIndex(r => (r.d.recNo||'').trim()===recNo && (
+      ((r.d.custName||'').trim().toLowerCase()===custKey) ||
+      ((r.d.loanAccNo||'').trim().toLowerCase()===custKey) ||
+      ((r.d.accNo||'').trim().toLowerCase()===custKey)
+    ));
   }
   const rec = { id: existing>=0?recs[existing].id:id, type:data.type, items:data.items, d:data.d, tMV:data.tMV, savedAt: new Date().toISOString() };
   if(existing>=0) recs[existing]=rec; else recs.unshift(rec);
@@ -5064,6 +5092,13 @@ function saveRecord(data) {
 
 function deleteRecord(id) {
   if(!confirm('Delete this record?')) return;
+  try {
+    const tomb = JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]');
+    tomb.push({id:id, at:Date.now()});
+    // Keep only last 500 tombstones / 60 days to avoid unbounded growth
+    const cutoff = Date.now() - 60*24*60*60*1000;
+    localStorage.setItem('nrj_deleted_record_ids', JSON.stringify(tomb.filter(t=>t.at>cutoff).slice(-500)));
+  } catch(e){}
   saveRecords(getRecords().filter(r=>r.id!==id));
   renderRecords();
 }
