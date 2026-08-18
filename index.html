@@ -4146,7 +4146,7 @@ function aGenerateCert() {
   }
   const recId = saveRecord({items, d, type:'pl61i', tMV});
   // Auto-create invoice after certificate is saved
-  autoInvoiceAfterCert(recId, d);
+  autoInvoiceAfterCert(recId, d, tMV);
   document.getElementById('modal').classList.add('show');
 }
 
@@ -6596,10 +6596,30 @@ function initLoanFirebase(cfg){
           });
         }
         if(d.records) {
-          const incoming = JSON.stringify(fixIds(fbToArr(d.records)));
+          const incomingArr = fixIds(fbToArr(d.records));
+          const incoming = JSON.stringify(incomingArr);
           const current  = localStorage.getItem('nrj_records')||'[]';
-          // Only write + re-render if actually different — avoids redundant churn from own echoed writes
-          if(incoming !== current) localStorage.setItem('nrj_records', incoming);
+          if(incoming !== current) {
+            // Safety net: never let an incoming snapshot silently shrink the local record
+            // count. If it looks smaller, only accept it when every "missing" record is
+            // one we actually deleted (tombstoned) ourselves — otherwise this is most likely
+            // a stale/in-flight cloud snapshot, not a real deletion, so keep local as-is.
+            let currentArr = [];
+            try { currentArr = JSON.parse(current); } catch(e){}
+            if(incomingArr.length < currentArr.length) {
+              let tomb = [];
+              try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]')).map(t=>t.id); } catch(e){}
+              const incomingIds = new Set(incomingArr.map(r=>r.id));
+              const unexplainedMissing = currentArr.some(r=>!incomingIds.has(r.id) && !tomb.includes(r.id));
+              if(unexplainedMissing) {
+                console.warn('Ignored a smaller records snapshot from cloud — looked stale, kept local copy.');
+              } else {
+                localStorage.setItem('nrj_records', incoming);
+              }
+            } else {
+              localStorage.setItem('nrj_records', incoming);
+            }
+          }
         }
         if(d.customers)    localStorage.setItem('nrj_customers',     JSON.stringify(fixIds(fbToArr(d.customers))));
         if(d.invoices)     localStorage.setItem('nrj_invoices',      JSON.stringify(fixIds(fbToArr(d.invoices))));
@@ -6662,7 +6682,10 @@ function pushLoanToCloud(){
     // Deep-clone via JSON to avoid reference issues, ensure arrays stay arrays
     const clean=v=>JSON.parse(JSON.stringify(v||[]));
     const data={
-      records:clean(getRecords()),
+      // NOTE: 'records' is deliberately NOT included here — it has its own dedicated,
+      // merge-safe write path in _baseSaveRecords(). Including it here too caused this
+      // debounced full-root write to race against that path and silently overwrite/erase
+      // records with whatever stale copy happened to be in local storage at the time.
       customers:clean(getCustomers()),
       invoices:clean(getInvoices()),
       payments:clean(getPayments()),
@@ -6678,7 +6701,7 @@ function pushLoanToCloud(){
       rate24k:localStorage.getItem('nrj_rate24k')||null,
       savedAt:new Date().toISOString()
     };
-    _loanFbRef.set(data)
+    _loanFbRef.update(data)
       .then(()=>showLoanSyncBadge('live'))
       .catch(e=>{console.warn('Cloud save error:',e);showLoanSyncBadge('error');});
   },700);
@@ -14624,9 +14647,9 @@ setInterval(()=>{
 }, 30 * 60 * 1000); // every 30 minutes
 
 // ── Auto Invoice after Certificate ──
-function autoInvoiceAfterCert(recId, d) {
-  if(!d.netLoan) return;
-  const loanAmt = parseFloat((d.netLoan||'0').replace(/[^\d.]/g,''))||0;
+function autoInvoiceAfterCert(recId, d, tMV) {
+  let loanAmt = parseFloat((d.netLoan||'0').replace(/[^\d.]/g,''))||0;
+  if(loanAmt <= 0) loanAmt = parseFloat(tMV)||0; // Net Loan Amount left blank — use market value instead
   if(loanAmt <= 0) return;
 
   const slabAmt  = getLoanInvoiceSlab(loanAmt);
@@ -14645,8 +14668,11 @@ function autoInvoiceAfterCert(recId, d) {
   const duplicate = allInvs.find(i=>{
     // Same record ID
     if(i.recordId && i.recordId===recId) return true;
-    // Same loan account number only
-    if(loanAccNo && i.loanAccNo && i.loanAccNo===loanAccNo) return true;
+    // Same loan account, same date, same service — i.e. this exact certificate was already
+    // invoiced today (prevents double-billing on accidental re-generate). A different
+    // appraisal/verification on the same account on a different day is NOT a duplicate.
+    if(loanAccNo && i.loanAccNo && i.loanAccNo===loanAccNo && i.date===certDate &&
+       (i.items||[]).some(it=>(it.desc||'').includes('Appraisal Charges (PL-61 Gold Loan)'))) return true;
     return false;
   });
 
@@ -14707,10 +14733,11 @@ function autoInvoiceAfterSecondVerify(recId, d, marketValue) {
   const today     = new Date().toISOString().split('T')[0];
   const allInvs   = getInvoices();
 
-  // Duplicate checks — same record OR same loan account
+  // Duplicate checks — same record OR same account+same-day+same-service
   const duplicate = allInvs.find(i=>{
     if(i.recordId && i.recordId===recId) return true;
-    if(loanAccNo && i.loanAccNo && i.loanAccNo===loanAccNo) return true;
+    if(loanAccNo && i.loanAccNo && i.loanAccNo===loanAccNo && i.date===certDate &&
+       (i.items||[]).some(it=>(it.desc||'').includes('Second Verification Charges (PL-61iii)'))) return true;
     return false;
   });
 
