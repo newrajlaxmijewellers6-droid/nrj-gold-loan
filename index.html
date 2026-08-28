@@ -6120,7 +6120,30 @@ function getCustomers() {
 function _baseSaveCustomers(arr) {
   localStorage.setItem('nrj_customers', JSON.stringify(arr));
   updateCustomerBadge();
-  pushLoanToCloud();
+  if(_loanFbRef) {
+    _loanFbRef.child('customers').once('value').then(snap=>{
+      const cloudVal = snap.val();
+      let cloudArr = [];
+      if(cloudVal) cloudArr = Array.isArray(cloudVal) ? cloudVal : Object.keys(cloudVal).sort((a,b)=>Number(a)-Number(b)).map(k=>cloudVal[k]);
+      let tomb = [];
+      try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_customer_keys')||'[]')).map(t=>t.key); } catch(e){}
+      const localKeys = new Set(arr.map(c=>c.key));
+      const merged = arr.slice();
+      cloudArr.forEach(c=>{
+        if(c && !localKeys.has(c.key) && !tomb.includes(c.key)) merged.push(c);
+      });
+      if(merged.length !== arr.length) {
+        localStorage.setItem('nrj_customers', JSON.stringify(merged));
+        updateCustomerBadge();
+      }
+      _loanFbRef.child('customers').set(merged).catch(e=>console.error('Firebase save error:',e));
+    }).catch(e=>{
+      console.error('Firebase merge-check failed, saving as-is:', e);
+      _loanFbRef.child('customers').set(arr).catch(e2=>console.error('Firebase save error:',e2));
+    });
+  } else {
+    pushLoanToCloud();
+  }
 }
 function saveCustomers(arr) { _baseSaveCustomers(arr); triggerAutoSave(); }
 function updateCustomerBadge() {
@@ -6293,6 +6316,12 @@ function viewCustomerRecords(key) {
 
 function deleteCustomer(key) {
   if(!confirm('Remove this customer from the directory?\n(Records and invoices are not affected)')) return;
+  try {
+    const tomb = JSON.parse(localStorage.getItem('nrj_deleted_customer_keys')||'[]');
+    tomb.push({key:key, at:Date.now()});
+    const cutoff = Date.now() - 60*24*60*60*1000;
+    localStorage.setItem('nrj_deleted_customer_keys', JSON.stringify(tomb.filter(t=>t.at>cutoff).slice(-500)));
+  } catch(e){}
   saveCustomers(getCustomers().filter(c=>c.key!==key));
   renderCustomers();
 }
@@ -6621,7 +6650,28 @@ function initLoanFirebase(cfg){
             }
           }
         }
-        if(d.customers)    localStorage.setItem('nrj_customers',     JSON.stringify(fixIds(fbToArr(d.customers))));
+        if(d.customers) {
+          const incomingArr = fixIds(fbToArr(d.customers));
+          const incoming = JSON.stringify(incomingArr);
+          const current  = localStorage.getItem('nrj_customers')||'[]';
+          if(incoming !== current) {
+            let currentArr = [];
+            try { currentArr = JSON.parse(current); } catch(e){}
+            if(incomingArr.length < currentArr.length) {
+              let tomb = [];
+              try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_customer_keys')||'[]')).map(t=>t.key); } catch(e){}
+              const incomingKeys = new Set(incomingArr.map(c=>c.key));
+              const unexplainedMissing = currentArr.some(c=>!incomingKeys.has(c.key) && !tomb.includes(c.key));
+              if(unexplainedMissing) {
+                console.warn('Ignored a smaller customers snapshot from cloud — looked stale, kept local copy.');
+              } else {
+                localStorage.setItem('nrj_customers', incoming);
+              }
+            } else {
+              localStorage.setItem('nrj_customers', incoming);
+            }
+          }
+        }
         if(d.invoices)     localStorage.setItem('nrj_invoices',      JSON.stringify(fixIds(fbToArr(d.invoices))));
         if(d.payments)     localStorage.setItem('nrj_payments',      JSON.stringify(fixIds(fbToArr(d.payments))));
         if(d.settings)     localStorage.setItem('nrj_settings',      typeof d.settings==='string'?d.settings:JSON.stringify(d.settings));
@@ -6682,11 +6732,10 @@ function pushLoanToCloud(){
     // Deep-clone via JSON to avoid reference issues, ensure arrays stay arrays
     const clean=v=>JSON.parse(JSON.stringify(v||[]));
     const data={
-      // NOTE: 'records' is deliberately NOT included here — it has its own dedicated,
-      // merge-safe write path in _baseSaveRecords(). Including it here too caused this
-      // debounced full-root write to race against that path and silently overwrite/erase
-      // records with whatever stale copy happened to be in local storage at the time.
-      customers:clean(getCustomers()),
+      // NOTE: 'records' and 'customers' are deliberately NOT included here — both have
+      // their own dedicated, merge-safe write paths (_baseSaveRecords / _baseSaveCustomers).
+      // Including them here too caused this debounced full-root write to race against
+      // those paths and silently overwrite/erase data with a stale local copy.
       invoices:clean(getInvoices()),
       payments:clean(getPayments()),
       expenses:clean(getExpenses()),
