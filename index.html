@@ -82,9 +82,12 @@ body{font-family:Arial,sans-serif;background:#f4f1eb;color:#1a1a1a;font-size:14p
 .card-title{font-size:11px;font-weight:700;letter-spacing:.07em;color:#1a3a6b;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid #e8e0cc}
 
 /* ── FORM GRID ── */
-.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.form-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
 @media(min-width:540px){.form-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}}
-.field{display:flex;flex-direction:column;gap:3px}
+.field{display:flex;flex-direction:column;gap:3px;min-width:0}
+.field input[type=date],.field input[type=time]{width:100%;min-width:0;max-width:100%;box-sizing:border-box;-webkit-appearance:none;appearance:none;display:block;text-align:left;cursor:pointer}
+.field input[type=date]::-webkit-calendar-picker-indicator{display:block;opacity:1;cursor:pointer;padding:4px}
+.field input[type=date]::-webkit-date-and-time-value{text-align:left;min-height:1.2em}
 .field label{font-size:11px;font-weight:600;color:#555}
 .field input,.field select,.field textarea{padding:8px 10px;border:1px solid #ccc;border-radius:5px;font-size:14px;font-family:inherit;background:#fafaf7;color:#1a1a1a;min-height:42px}
 .field select{-webkit-appearance:auto;appearance:auto;cursor:pointer;background-image:none;}
@@ -15246,6 +15249,15 @@ function updateGSSplitTotal() {
   </div>
 </div>
 
+<script>
+// Tap anywhere on a date field to open the calendar (mobile-friendly)
+document.addEventListener('click', function(e){
+  var t = e.target;
+  if(t && t.tagName === 'INPUT' && t.type === 'date' && !t.readOnly && !t.disabled){
+    try { if(typeof t.showPicker === 'function') t.showPicker(); } catch(err){}
+  }
+}, true);
+</script>
 <script>
 // ── AUTO-FIT CERTIFICATE/VALUATION PREVIEW ON MOBILE ──
 // Scales the certificate preview table down so it fits the screen width
