@@ -934,17 +934,25 @@ window.addEventListener('error', function(e){
           <button class="btn btn-sm" onclick="openCashBillModal()" style="background:#b8860b;color:#fff;border-color:#b8860b">💵 Cash Bill</button>
         </div>
       </div>
-      <!-- Period Filter Tabs -->
-      <button onclick="toggleInvFilter()" id="inv-filter-toggle" class="btn btn-sm" style="background:#fff8e1;border-color:#d4a017;color:#7a4f00;font-size:12px;padding:5px 12px">📅 Filter by Date</button>
-      <div id="inv-period-tabs-wrap" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px">
-      <div class="period-tabs" id="inv-period-tabs">
-        <button class="period-tab active" onclick="setInvPeriod('all',this)">📋 All</button>
-        <button class="period-tab" onclick="setInvPeriod('day',this)">📅 Today</button>
-        <button class="period-tab" onclick="setInvPeriod('week',this)">📆 This Week</button>
-        <button class="period-tab" onclick="setInvPeriod('month',this)">🗓 This Month</button>
-        <button class="period-tab" onclick="setInvPeriod('year',this)">📊 This Year</button>
-      </div>
-      <input type="date" id="inv-specific-date" onchange="setInvPeriod('specific',null)" title="Pick a specific date" style="padding:5px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;height:32px;cursor:pointer;background:#fff8e1;border-color:#d4a017">
+      <!-- Period Filter (always visible) -->
+      <div id="inv-period-tabs-wrap" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0;padding:8px 10px;background:#fff8e1;border:1px solid #d4a017;border-radius:8px">
+        <div style="font-size:12px;font-weight:700;color:#7a4f00;width:100%">📅 Filter by Date</div>
+        <div class="period-tabs" id="inv-period-tabs">
+          <button class="period-tab active" onclick="setInvPeriod('all',this)">📋 All</button>
+          <button class="period-tab" onclick="setInvPeriod('day',this)">📅 Today</button>
+          <button class="period-tab" onclick="setInvPeriod('week',this)">📆 This Week</button>
+          <button class="period-tab" onclick="setInvPeriod('month',this)">🗓 This Month</button>
+          <button class="period-tab" onclick="setInvPeriod('year',this)">📊 This Year</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%">
+          <label style="font-size:12px;color:#555">Date:</label>
+          <input type="date" id="inv-specific-date" onchange="setInvPeriod('specific',null)" title="Pick a specific date" style="padding:5px 8px;border:1px solid #d4a017;border-radius:6px;font-size:13px;height:34px;background:#fff;min-width:0;max-width:100%">
+          <label style="font-size:12px;color:#555;margin-left:6px">From:</label>
+          <input type="date" id="inv-from-date" onchange="setInvPeriod('range',null)" style="padding:5px 8px;border:1px solid #d4a017;border-radius:6px;font-size:13px;height:34px;background:#fff;min-width:0;max-width:100%">
+          <label style="font-size:12px;color:#555">To:</label>
+          <input type="date" id="inv-to-date" onchange="setInvPeriod('range',null)" style="padding:5px 8px;border:1px solid #d4a017;border-radius:6px;font-size:13px;height:34px;background:#fff;min-width:0;max-width:100%">
+          <button class="btn btn-sm" onclick="clearInvDateFilter()" style="background:#fff;border-color:#d4a017;color:#7a4f00;min-height:34px;padding:4px 12px">✖ Clear</button>
+        </div>
       </div>
       <div id="inv-period-summary"></div>
       <div id="invoices-list"></div>
@@ -2310,14 +2318,11 @@ let invPeriod = 'all';
 let payPeriod = 'all';
 let recPeriod = 'all';
 
-function toggleInvFilter() {
-  const wrap = document.getElementById('inv-period-tabs-wrap');
-  const btn  = document.getElementById('inv-filter-toggle');
-  if(!wrap) return;
-  const open = wrap.style.display === 'none';
-  wrap.style.display = open ? 'flex' : 'none';
-  btn.style.background = open ? '#d4a017' : '#fff8e1';
-  btn.style.color = open ? '#fff' : '#7a4f00';
+function toggleInvFilter() { /* filter bar is now always visible */ }
+function clearInvDateFilter() {
+  ['inv-specific-date','inv-from-date','inv-to-date'].forEach(id=>{ const e=document.getElementById(id); if(e) e.value=''; });
+  const first = document.querySelector('#inv-period-tabs .period-tab');
+  setInvPeriod('all', first);
 }
 
 function setInvPeriod(period, el) {
@@ -2401,13 +2406,22 @@ function setRecPeriod(period, el) {
   renderRecords();
 }
 
+function _ymdLocal(d) {
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
 function getPeriodDateRange(period) {
   const now = new Date();
-  const todayStr = now.toISOString().split('T')[0];
+  const todayStr = _ymdLocal(now);
+  if(period === 'range') {
+    const f = document.getElementById('inv-from-date')?.value || null;
+    const t = document.getElementById('inv-to-date')?.value || null;
+    const fm = x => new Date(x+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    return {from:f, to:t, label:'📅 '+(f?fm(f):'Start')+' – '+(t?fm(t):'Today')};
+  }
   if(period === 'all') return {from: null, to: null, label: 'All Time'};
   if(period === 'specific') {
-    const d = document.getElementById('rec-specific-date')?.value || todayStr;
-    const label = new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
+    const d = document.getElementById('inv-specific-date')?.value || document.getElementById('rec-specific-date')?.value || todayStr;
+    const label = new Date(d+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'long',year:'numeric'});
     return {from: d, to: d, label: '📅 '+label};
   }
   if(period === 'day') {
@@ -2418,17 +2432,17 @@ function getPeriodDateRange(period) {
     const diffToMon = (day === 0) ? -6 : 1 - day;
     const mon = new Date(now); mon.setDate(now.getDate() + diffToMon);
     const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-    return {from: mon.toISOString().split('T')[0], to: sun.toISOString().split('T')[0],
+    return {from: _ymdLocal(mon), to: _ymdLocal(sun),
       label: 'This Week (' + mon.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) + ' – ' + sun.toLocaleDateString('en-IN',{day:'2-digit',month:'short'}) + ')'};
   }
   if(period === 'month') {
-    const from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const to   = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().split('T')[0];
+    const from = _ymdLocal(new Date(now.getFullYear(), now.getMonth(), 1));
+    const to   = _ymdLocal(new Date(now.getFullYear(), now.getMonth()+1, 0));
     return {from, to, label: 'This Month (' + now.toLocaleDateString('en-IN',{month:'long',year:'numeric'}) + ')'};
   }
   if(period === 'year') {
-    const from = new Date(now.getFullYear(), 0, 1).toISOString().split('T')[0];
-    const to   = new Date(now.getFullYear(), 11, 31).toISOString().split('T')[0];
+    const from = _ymdLocal(new Date(now.getFullYear(), 0, 1));
+    const to   = _ymdLocal(new Date(now.getFullYear(), 11, 31));
     return {from, to, label: 'This Year (' + now.getFullYear() + ')'};
   }
   return {from: null, to: null, label: ''};
@@ -2447,7 +2461,8 @@ function filterByPeriod(items, dateField, period) {
   if(!from && !to) return items;
   return items.filter(item => {
     const d = (item[dateField]||'').split('T')[0];
-    return d >= from && d <= to;
+    if(!d) return false;
+    return (!from || d >= from) && (!to || d <= to);
   });
 }
 
