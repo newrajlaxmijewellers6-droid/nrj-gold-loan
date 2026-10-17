@@ -33,7 +33,7 @@ function truncNet(val) {
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NRJ Gold Loan App v202606151625</title>
+<title>NRJ Gold Loan App build-2026-10-17-A</title>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -293,11 +293,31 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
 <body>
 <div id="nrj-crash-banner" style="display:none;position:fixed;inset:0;z-index:999999;background:#fff;color:#900;padding:20px;font:14px monospace;overflow:auto;white-space:pre-wrap"></div>
 <script>
-window.addEventListener('error', function(e){
+window.NRJ_BUILD = 'build-2026-10-17-A';
+window.__nrjErrors = [];
+function __nrjShowCrash(){
   var b = document.getElementById('nrj-crash-banner');
   if(!b) return;
   b.style.display = 'block';
-  b.textContent = 'App crashed — please screenshot this and send it:\n\n' + (e.message||'') + '\n' + (e.filename||'') + ':' + (e.lineno||'') + ':' + (e.colno||'') + '\n\n' + (e.error && e.error.stack ? e.error.stack : '');
+  b.textContent = 'App crashed — please screenshot this and send it:\n(' + window.NRJ_BUILD + ')\n\n' + window.__nrjErrors.join('\n\n----------\n\n');
+}
+window.addEventListener('error', function(e){
+  window.__nrjErrors.push('#' + (window.__nrjErrors.length+1) + ' ' + (e.message||'') + '\n' + (e.filename||'') + ':' + (e.lineno||'') + ':' + (e.colno||'') + (e.error && e.error.stack ? '\n' + e.error.stack : ''));
+  if(window.__nrjErrors.length > 6) window.__nrjErrors.shift();
+  __nrjShowCrash();
+});
+window.addEventListener('unhandledrejection', function(e){
+  var r = e.reason; window.__nrjErrors.push('Promise error: ' + (r && (r.stack||r.message) || r));
+  if(window.__nrjErrors.length > 6) window.__nrjErrors.shift();
+});
+// If the main script never finished loading (broken / incomplete upload), say so clearly
+window.addEventListener('load', function(){
+  setTimeout(function(){
+    if(!window.__NRJ_MAIN_OK){
+      window.__nrjErrors.unshift('MAIN SCRIPT DID NOT LOAD COMPLETELY. The index.html on GitHub is probably incomplete or damaged — upload the latest index.html again.');
+      __nrjShowCrash();
+    }
+  }, 2500);
 });
 </script>
 
@@ -15217,6 +15237,8 @@ function updateGSSplitTotal() {
     }
   }
 }
+
+window.__NRJ_MAIN_OK = true;
 </script>
 
 <!-- LOGIN SCREEN -->
