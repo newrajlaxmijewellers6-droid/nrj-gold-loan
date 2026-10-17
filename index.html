@@ -1932,10 +1932,70 @@ function getAllInvoicesForGST() {
 
   return [...gstInvs, ...saleInvs];
 }
-function _baseSaveInvoices(arr) { localStorage.setItem('nrj_invoices', JSON.stringify(arr)); updateInvoiceBadges(); pushLoanToCloud(); }
+
+// ── Safe sync helpers (invoices / payments) ──
+// Anything that disappears from the local list because of a real save (delete, edit)
+// is remembered as a "tombstone", so a stale cloud copy can never bring it back,
+// and a stale cloud copy can never silently erase entries that were NOT deleted.
+function _tombstoneRemoved(storageKey, tombKey, newArr) {
+  try {
+    const prev = JSON.parse(localStorage.getItem(storageKey)||'[]');
+    const newIds = new Set((newArr||[]).map(x=>x && String(x.id)));
+    const removed = prev.filter(x=>x && x.id!==undefined && !newIds.has(String(x.id))).map(x=>({id:x.id, at:Date.now()}));
+    if(!removed.length) return;
+    const tomb = JSON.parse(localStorage.getItem(tombKey)||'[]');
+    const cutoff = Date.now() - 60*24*60*60*1000;
+    localStorage.setItem(tombKey, JSON.stringify(tomb.concat(removed).filter(t=>t.at>cutoff).slice(-3000)));
+  } catch(e){}
+}
+function _tombIds(tombKey) {
+  try { return new Set(JSON.parse(localStorage.getItem(tombKey)||'[]').map(t=>String(t.id!==undefined?t.id:t.key))); } catch(e){ return new Set(); }
+}
+function _safeCloudWrite(child, storageKey, tombKey, arr, onMerged) {
+  if(typeof _loanFbRef==='undefined' || !_loanFbRef) return;
+  const ref = _loanFbRef.child(child);
+  ref.once('value').then(snap=>{
+    const v = snap.val();
+    let cloudArr = [];
+    if(v) cloudArr = Array.isArray(v) ? v : Object.keys(v).sort((a,b)=>Number(a)-Number(b)).map(k=>v[k]);
+    const tomb = _tombIds(tombKey);
+    const localIds = new Set(arr.map(x=>x && String(x.id)));
+    const merged = arr.slice();
+    cloudArr.forEach(x=>{ if(x && x.id!==undefined && !localIds.has(String(x.id)) && !tomb.has(String(x.id))) merged.push(x); });
+    if(merged.length !== arr.length) {
+      localStorage.setItem(storageKey, JSON.stringify(merged));
+      if(onMerged) onMerged();
+    }
+    return ref.set(merged);
+  }).catch(e=>{
+    console.error('Safe cloud write failed, writing as-is:', e);
+    ref.set(arr).catch(e2=>console.error('Cloud save error:', e2));
+  });
+}
+// Listener-side guard: accept an incoming cloud list only if it doesn't silently drop entries
+function _acceptIncomingList(storageKey, tombKey, incomingArr, idField) {
+  idField = idField || 'id';
+  const incoming = JSON.stringify(incomingArr);
+  const current = localStorage.getItem(storageKey)||'[]';
+  if(incoming === current) return;
+  let currentArr = [];
+  try { currentArr = JSON.parse(current); } catch(e){}
+  const tomb = _tombIds(tombKey);
+  const incomingIds = new Set(incomingArr.map(x=>x && String(x[idField])));
+  const missing = currentArr.filter(x=>x && !incomingIds.has(String(x[idField])) && !tomb.has(String(x[idField])));
+  if(missing.length) {
+    // Cloud copy is missing entries we never deleted → keep them (merge, don't erase)
+    console.warn('Cloud snapshot for '+storageKey+' looked stale; kept '+missing.length+' local entries.');
+    const kept = incomingArr.filter(x=>!(x && tomb.has(String(x[idField])))).concat(missing);
+    localStorage.setItem(storageKey, JSON.stringify(kept));
+  } else {
+    localStorage.setItem(storageKey, incoming);
+  }
+}
+function _baseSaveInvoices(arr) { _tombstoneRemoved('nrj_invoices','nrj_deleted_invoice_ids',arr); localStorage.setItem('nrj_invoices', JSON.stringify(arr)); updateInvoiceBadges(); _safeCloudWrite('invoices','nrj_invoices','nrj_deleted_invoice_ids',arr,updateInvoiceBadges); }
 function saveInvoices(arr) { _baseSaveInvoices(arr); triggerAutoSave(); }
 function getPayments() { try{return JSON.parse(localStorage.getItem('nrj_payments')||'[]');}catch(e){return[];} }
-function _baseSavePayments(arr) { localStorage.setItem('nrj_payments', JSON.stringify(arr)); updateInvoiceBadges(); pushLoanToCloud(); }
+function _baseSavePayments(arr) { _tombstoneRemoved('nrj_payments','nrj_deleted_payment_ids',arr); localStorage.setItem('nrj_payments', JSON.stringify(arr)); updateInvoiceBadges(); _safeCloudWrite('payments','nrj_payments','nrj_deleted_payment_ids',arr,updateInvoiceBadges); }
 function savePayments(arr) { _baseSavePayments(arr); triggerAutoSave(); }
 
 function updateInvoiceBadges() {
@@ -4650,10 +4710,10 @@ function refreshPanel(panel, btn) {
       _loanFbRef.once('value', snap => {
         const d = snap.val();
         if(d) {
-          if(d.records)        localStorage.setItem('nrj_records',         JSON.stringify(Object.values(d.records)));
-          if(d.invoices)       localStorage.setItem('nrj_invoices',        JSON.stringify(Object.values(d.invoices)));
-          if(d.payments)       localStorage.setItem('nrj_payments',        JSON.stringify(Object.values(d.payments)));
-          if(d.customers)      localStorage.setItem('nrj_customers',       JSON.stringify(Object.values(d.customers)));
+          if(d.records)        _acceptIncomingList('nrj_records','nrj_deleted_record_ids',Object.values(d.records));
+          if(d.invoices)       _acceptIncomingList('nrj_invoices','nrj_deleted_invoice_ids',Object.values(d.invoices));
+          if(d.payments)       _acceptIncomingList('nrj_payments','nrj_deleted_payment_ids',Object.values(d.payments));
+          if(d.customers)      _acceptIncomingList('nrj_customers','nrj_deleted_customer_keys',Object.values(d.customers),'key');
           if(d.expenses)       localStorage.setItem('nrj_expenses',        JSON.stringify(Object.values(d.expenses)));
           if(d.bankAccounts)   localStorage.setItem('nrj_bank_accounts',   JSON.stringify(Object.values(d.bankAccounts)));
           if(d.bankTxns)       localStorage.setItem('nrj_bank_txns',       JSON.stringify(Object.values(d.bankTxns)));
@@ -6675,8 +6735,8 @@ function initLoanFirebase(cfg){
             }
           }
         }
-        if(d.invoices)     localStorage.setItem('nrj_invoices',      JSON.stringify(fixIds(fbToArr(d.invoices))));
-        if(d.payments)     localStorage.setItem('nrj_payments',      JSON.stringify(fixIds(fbToArr(d.payments))));
+        if(d.invoices)     _acceptIncomingList('nrj_invoices','nrj_deleted_invoice_ids',fixIds(fbToArr(d.invoices)));
+        if(d.payments)     _acceptIncomingList('nrj_payments','nrj_deleted_payment_ids',fixIds(fbToArr(d.payments)));
         if(d.settings)     localStorage.setItem('nrj_settings',      typeof d.settings==='string'?d.settings:JSON.stringify(d.settings));
         if(d.rate24k)      localStorage.setItem('nrj_rate24k',       d.rate24k);
         if(d.expenses)       localStorage.setItem('nrj_expenses',        JSON.stringify(fbToArr(d.expenses)));
@@ -6739,8 +6799,7 @@ function pushLoanToCloud(){
       // their own dedicated, merge-safe write paths (_baseSaveRecords / _baseSaveCustomers).
       // Including them here too caused this debounced full-root write to race against
       // those paths and silently overwrite/erase data with a stale local copy.
-      invoices:clean(getInvoices()),
-      payments:clean(getPayments()),
+      // invoices & payments also have their own safe write path (_safeCloudWrite)
       expenses:clean(getExpenses()),
       bankAccounts:clean(getBankAccounts()),
       bankTxns:clean(getBankTxns()),
