@@ -256,6 +256,11 @@ table.cert-table tr.total-row td{font-weight:bold;background:#f5f5f5}
 .sticky-filter-bar{position:sticky;top:84px;z-index:150;background:#f5f0e8;padding:8px 0 8px;margin:0 0 12px;border-bottom:1px solid #e0d8c8}
 #inv-period-tabs,#pay-period-tabs,#exp-period-tabs{position:sticky;top:84px;z-index:150;background:#f5f0e8;padding:6px 0;margin-bottom:12px}
 .period-tab{flex:1;padding:9px 6px;font-size:12px;font-weight:700;cursor:pointer;border:none;background:#faf7f0;color:#666;font-family:inherit;min-height:40px;touch-action:manipulation;border-right:1px solid #d4c9a8;transition:all .15s;white-space:nowrap;text-align:center}
+/* Mobile: let the period tabs wrap onto a second row so the last one (⏳ Pending) is never cut off */
+@media(max-width:700px){
+  .period-tabs{flex-wrap:wrap}
+  .period-tab{flex:1 1 30%;min-width:0;padding:9px 4px;font-size:12px;border-bottom:1px solid #d4c9a8}
+}
 .period-tab:last-child{border-right:none}
 .period-tab.active{background:#1a3a6b;color:#fff}
 .period-tab:active{opacity:.8}
@@ -986,7 +991,7 @@ window.addEventListener('load', function(){
         <div class="card-title" style="margin-bottom:0;border-bottom:none;padding-bottom:0">💰 Payment Ledger</div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <button onclick="exportExcel('payments')" class="btn" style="font-size:12px;padding:6px 12px;background:#1a6b3a;color:#fff;border-color:#1a6b3a">📊 Excel</button>
-      <input id="pay-search" type="text" placeholder="Search customer / invoice..." oninput="renderPayments()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:200px">
+      <input id="pay-search" type="text" placeholder="Search customer / invoice..." oninput="renderPayments()" style="padding:7px 10px;border:1px solid #ccc;border-radius:5px;font-size:13px;width:200px;max-width:100%">
           <button class="btn btn-sm" onclick="refreshPanel('payments',this)" title="Refresh Payments" style="background:#e8f0ff;border-color:#b0c4e8;color:#1a3a6b;font-size:16px;padding:6px 12px;min-height:38px">↻</button>
         </div>
       </div>
@@ -1965,13 +1970,15 @@ function getAllInvoicesForGST() {
 // Anything that disappears from the local list because of a real save (delete, edit)
 // is remembered as a "tombstone", so a stale cloud copy can never bring it back,
 // and a stale cloud copy can never silently erase entries that were NOT deleted.
-function _tombstoneRemoved(storageKey, tombKey, newArr) {
+function _tombstoneRemoved(storageKey, tombKey, newArr, idField) {
+  idField = idField || 'id';
   try {
     const prev = JSON.parse(localStorage.getItem(storageKey)||'[]');
-    const newIds = new Set((newArr||[]).map(x=>x && String(x.id)));
-    const removed = prev.filter(x=>x && x.id!==undefined && !newIds.has(String(x.id))).map(x=>({id:x.id, at:Date.now()}));
-    if(!removed.length) return;
-    const tomb = JSON.parse(localStorage.getItem(tombKey)||'[]');
+    const newIds = new Set((newArr||[]).map(x=>x && String(x[idField])));
+    const removed = prev.filter(x=>x && x[idField]!==undefined && !newIds.has(String(x[idField]))).map(x=>({id:x[idField], at:Date.now()}));
+    let tomb = JSON.parse(localStorage.getItem(tombKey)||'[]');
+    // anything that is present again (restored / re-added) is no longer "deleted"
+    tomb = tomb.filter(t=>!newIds.has(String(t.id!==undefined?t.id:t.key)));
     const cutoff = Date.now() - 60*24*60*60*1000;
     localStorage.setItem(tombKey, JSON.stringify(tomb.concat(removed).filter(t=>t.at>cutoff).slice(-3000)));
   } catch(e){}
@@ -5109,6 +5116,11 @@ function getRecords() {
 }
 
 function _baseSaveRecords(recs) {
+  try {
+    const _ids = new Set(recs.map(r=>String(r.id)));
+    const _t = JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]').filter(t=>!_ids.has(String(t.id)));
+    localStorage.setItem('nrj_deleted_record_ids', JSON.stringify(_t));
+  } catch(e){}
   localStorage.setItem('nrj_records', JSON.stringify(recs));
   updateRecordsBadge();
   // Single write path only — direct child write WITHOUT the debounced full-root push
@@ -6216,6 +6228,11 @@ function getCustomers() {
   try { return JSON.parse(localStorage.getItem('nrj_customers')||'[]'); } catch(e){ return []; }
 }
 function _baseSaveCustomers(arr) {
+  try {
+    const _ks = new Set(arr.map(c=>String(c.key)));
+    const _t = JSON.parse(localStorage.getItem('nrj_deleted_customer_keys')||'[]').filter(t=>!_ks.has(String(t.key)));
+    localStorage.setItem('nrj_deleted_customer_keys', JSON.stringify(_t));
+  } catch(e){}
   localStorage.setItem('nrj_customers', JSON.stringify(arr));
   updateCustomerBadge();
   if(_loanFbRef) {
@@ -6788,7 +6805,7 @@ function initLoanFirebase(cfg){
           }
         }
         if(d.purchases)    localStorage.setItem('nrj_purchases',     JSON.stringify(Array.isArray(d.purchases)?d.purchases:Object.values(d.purchases||{})));
-        if(d.cashBills)     localStorage.setItem('nrj_cash_bills',     JSON.stringify(Object.values ? (Array.isArray(d.cashBills)?d.cashBills:Object.values(d.cashBills)) : []));
+        if(d.cashBills)     _acceptIncomingList('nrj_cash_bills','nrj_deleted_cashbill_ids',Array.isArray(d.cashBills)?d.cashBills:Object.values(d.cashBills));
         if(d.branchOfficers) localStorage.setItem('nrj_branch_officers',JSON.stringify(d.branchOfficers));
         if(d.branchEmails)   localStorage.setItem('nrj_branch_emails',  JSON.stringify(d.branchEmails));
         // Refresh settings UI if open
@@ -6840,7 +6857,6 @@ function pushLoanToCloud(){
       bankTxns:clean(getBankTxns()),
       branchOfficers:getBranchOfficers(),
       branchEmails:getBranchEmails(),
-      cashBills:   clean(getCashBills()),
       goldSales:   clean(getGoldSales()),
       purchases:   clean(getPurchases()),
       settings:localStorage.getItem('nrj_settings')||null,
@@ -9227,8 +9243,9 @@ let cbItemCount = 0;
 
 function getCashBills() { try{ return JSON.parse(localStorage.getItem(CB_KEY)||'[]'); }catch(e){ return []; } }
 function saveCashBills(arr) {
+  _tombstoneRemoved(CB_KEY,'nrj_deleted_cashbill_ids',arr);
   localStorage.setItem(CB_KEY, JSON.stringify(arr));
-  try{ if(_loanFbRef) pushLoanToCloud(); }catch(e){}
+  try{ _safeCloudWrite('cashBills', CB_KEY, 'nrj_deleted_cashbill_ids', arr); }catch(e){}
 }
 
 function nextCashBillNo() {
@@ -14649,6 +14666,7 @@ function downloadFullBackup(auto=false) {
     bankTxns:    getBankTxns(),
     customers:   JSON.parse(localStorage.getItem('nrj_customers')||'[]'),
     expenses:    JSON.parse(localStorage.getItem('nrj_expenses')||'[]'),
+    cashBills:   JSON.parse(localStorage.getItem('nrj_cash_bills')||'[]'),
     settings:    JSON.parse(localStorage.getItem('nrj_settings')||'{}'),
   };
 
@@ -14716,10 +14734,24 @@ function restoreFromBackup() {
           if(newTxns.length) { localStorage.setItem('nrj_bank_txns',JSON.stringify([...cur,...newTxns])); added.txns=newTxns.length; }
         }
 
+        // Also merge payments, customers, expenses and cash bills (only the missing ones)
+        const _mergeById = (key, list, idf) => {
+          if(!list || !list.length) return 0;
+          let cur = []; try{ cur = JSON.parse(localStorage.getItem(key)||'[]'); }catch(e){}
+          const ids = new Set(cur.map(x=>String(x[idf])));
+          const add = list.filter(x=>x && !ids.has(String(x[idf])));
+          if(add.length) localStorage.setItem(key, JSON.stringify([...cur, ...add]));
+          return add.length;
+        };
+        if(backup.payments?.length)  { const c=getPayments();  const ids=new Set(c.map(x=>String(x.id)));  const add=backup.payments.filter(x=>!ids.has(String(x.id)));  if(add.length) savePayments([...c,...add]);  added.payments=add.length; }
+        if(backup.cashBills?.length) { const c=getCashBills(); const ids=new Set(c.map(x=>String(x.id))); const add=backup.cashBills.filter(x=>!ids.has(String(x.id))); if(add.length) saveCashBills([...c,...add]); added.cashBills=add.length; }
+        if(backup.customers?.length) { added.customers = _mergeById('nrj_customers', backup.customers, 'key'); if(added.customers) saveCustomers(getCustomers()); }
+        if(backup.expenses?.length)  { added.expenses  = _mergeById('nrj_expenses', backup.expenses, 'id'); }
+
         pushLoanToCloud();
         renderRecords();
         renderInvoices();
-        alert(`✅ Restore complete!\n\nAdded:\nRecords: ${added.records}\nInvoices: ${added.invoices}\nGold Sales: ${added.sales}\nBank Txns: ${added.txns}`);
+        alert(`✅ Restore complete!\n\nAdded:\nRecords: ${added.records}\nInvoices: ${added.invoices}\nPayments: ${added.payments||0}\nCash Bills: ${added.cashBills||0}\nCustomers: ${added.customers||0}\nGold Sales: ${added.sales}\nBank Txns: ${added.txns}`);
         _showToast('✅ Backup restored!', '#166534');
 
       } catch(e) { alert('Error reading backup file: '+e.message); }
