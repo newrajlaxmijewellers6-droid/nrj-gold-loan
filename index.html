@@ -1599,6 +1599,9 @@ window.addEventListener('load', function(){
       <!-- Buyer details -->
       <div class="inv-section">
         <div class="inv-section-title"><span class="dot"></span>Bill To — Buyer Details</div>
+        <div id="inv-quick-buyers" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px"></div>
+        <div class="email-field"><label>Branch <span style="font-size:10px;color:#999;font-weight:400">(optional — adds the branch to the buyer name)</span></label>
+          <select id="inv-branchSel" onchange="applyInvBranch(this.value)"><option value="">— Select branch —</option></select></div>
         <div class="email-field" style="position:relative"><label>Buyer Name</label>
           <input id="inv-custName" type="text" placeholder="e.g. Nisha Bhapker" oninput="_invCustSearch()" autocomplete="off">
           <div id="inv-cust-drop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #C9922A;border-radius:0 0 8px 8px;z-index:999;max-height:200px;overflow-y:auto;box-shadow:0 8px 20px rgba(15,30,61,.15)"></div>
@@ -2081,7 +2084,84 @@ function autoUpdateInvNo() {
   if (dateVal) document.getElementById('inv-no').value = nextInvoiceNo(dateVal);
 }
 
+
+// ── Quick buyers (e.g. SBI) — one tap fills the whole buyer section of a GST invoice ──
+function _qbEsc(x){ return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function getQuickBuyers(){ try{ return JSON.parse(localStorage.getItem('nrj_quick_buyers')||'[]'); }catch(e){ return []; } }
+function saveQuickBuyers(arr){
+  _tombstoneRemoved('nrj_quick_buyers','nrj_deleted_quickbuyer_ids',arr);
+  localStorage.setItem('nrj_quick_buyers', JSON.stringify(arr));
+  try{ _safeCloudWrite('quickBuyers','nrj_quick_buyers','nrj_deleted_quickbuyer_ids',arr); }catch(e){}
+}
+function renderQuickBuyers(){
+  const box = document.getElementById('inv-quick-buyers'); if(!box) return;
+  const list = getQuickBuyers();
+  box.innerHTML = list.map(b=>
+    '<span style="display:inline-flex;align-items:center;background:#e8f0ff;border:1px solid #1a3a6b;border-radius:18px;overflow:hidden">'
+    + '<button type="button" onclick="fillQuickBuyer('+b.id+')" style="border:none;background:none;padding:8px 12px;font-weight:700;color:#1a3a6b;font-size:13px;cursor:pointer">🏦 '+_qbEsc(b.label)+'</button>'
+    + '<button type="button" onclick="deleteQuickBuyer('+b.id+')" title="Remove this quick button" style="border:none;background:none;padding:8px 10px 8px 2px;color:#b91c1c;font-size:12px;cursor:pointer">✕</button></span>'
+  ).join('')
+  + '<button type="button" onclick="saveCurrentAsQuickBuyer()" style="border:1px dashed #1a3a6b;background:#fff;color:#1a3a6b;border-radius:18px;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer">➕ Save this buyer as quick button</button>';
+  try{ populateInvBranches(); }catch(e){}
+}
+
+// ── Branch picker for GST invoices (e.g. SBI – <Branch> Branch) ──
+function _branchTitle(b){
+  return String(b||'').toLowerCase().split(/\s+/).map(w=>w==='wtc'?'WTC':(w.charAt(0).toUpperCase()+w.slice(1))).join(' ');
+}
+function populateInvBranches(){
+  const sel=document.getElementById('inv-branchSel'); if(!sel) return;
+  let names=[]; try{ names=Object.keys(getBranchEmails()||{}); }catch(e){}
+  names=names.filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML='<option value="">— Select branch —</option>'
+    + names.map(n=>'<option value="'+_qbEsc(n)+'">'+_qbEsc(_branchTitle(n))+'</option>').join('')
+    + '<option value="__other">✏️ Other branch (type name)…</option>'
+    + '<option value="__none">✖ No branch</option>';
+  sel.value='';
+}
+function applyInvBranch(val){
+  const nameEl=document.getElementById('inv-custName'); if(!nameEl||!val) return;
+  let branch=val;
+  if(val==='__other'){
+    branch=(prompt('Branch ka naam likho:','')||'').trim();
+    if(!branch){ document.getElementById('inv-branchSel').value=''; return; }
+  }
+  // remove any branch already added, then add the new one
+  let base=(nameEl.value||'').replace(/\s*[–-]\s*[^–-]*\bBranch\s*$/i,'').trim() || 'State Bank of India';
+  nameEl.value = (val==='__none') ? base : (base+' – '+_branchTitle(branch)+' Branch');
+  const drop=document.getElementById('inv-cust-drop'); if(drop) drop.style.display='none';
+}
+
+function fillQuickBuyer(id){
+  const b = getQuickBuyers().find(x=>String(x.id)===String(id)); if(!b) return;
+  const set=(i,v)=>{ const el=document.getElementById(i); if(el) el.value=v||''; };
+  set('inv-custName', b.name); set('inv-custAddr', b.addr); set('inv-custMobile', b.mobile);
+  set('inv-custGstin', b.gstin); set('inv-custState', b.state||'Maharashtra'); set('inv-custStateCode', b.stateCode||'27');
+  const drop=document.getElementById('inv-cust-drop'); if(drop) drop.style.display='none';
+}
+function saveCurrentAsQuickBuyer(){
+  const g=i=>(document.getElementById(i)?.value||'').trim();
+  const name=g('inv-custName');
+  if(!name){ alert('Pehle Buyer Name aur baaki details bharo, phir ➕ dabao.'); return; }
+  const label=(prompt('Quick button ka naam (jaise SBI):', name.length>18?name.slice(0,18):name)||'').trim();
+  if(!label) return;
+  const rec={ label, name, addr:g('inv-custAddr'), mobile:g('inv-custMobile'), gstin:g('inv-custGstin').toUpperCase(), state:g('inv-custState')||'Maharashtra', stateCode:g('inv-custStateCode')||'27' };
+  const list=getQuickBuyers();
+  const idx=list.findIndex(x=>(x.label||'').toLowerCase()===label.toLowerCase());
+  if(idx>=0){ list[idx]=Object.assign({}, list[idx], rec); }
+  else { list.push(Object.assign({id:Date.now()}, rec)); }
+  saveQuickBuyers(list); renderQuickBuyers();
+  try{ _showToast('✅ Quick button saved: '+label,'#166534'); }catch(e){}
+}
+function deleteQuickBuyer(id){
+  if(!confirm('Ye quick button hata dein? (Invoices par koi asar nahi)')) return;
+  saveQuickBuyers(getQuickBuyers().filter(x=>String(x.id)!==String(id)));
+  renderQuickBuyers();
+}
+document.addEventListener('DOMContentLoaded', function(){ try{ renderQuickBuyers(); }catch(e){} });
+
 function openNewInvoiceModal() {
+  try{ renderQuickBuyers(); }catch(e){}
   invItemCount = 0;
   document.getElementById('inv-items-list').innerHTML = '';
   document.getElementById('inv-edit-id').value = '';
@@ -2286,6 +2366,7 @@ function closeInvoiceModal() {
 }
 
 function editInvoice(id) {
+  try{ renderQuickBuyers(); }catch(e){}
   const inv = getInvoices().find(i=>i.id===id); if(!inv) return;
   invItemCount = 0;
   document.getElementById('inv-items-list').innerHTML = '';
@@ -6806,6 +6887,7 @@ function initLoanFirebase(cfg){
         }
         if(d.purchases)    localStorage.setItem('nrj_purchases',     JSON.stringify(Array.isArray(d.purchases)?d.purchases:Object.values(d.purchases||{})));
         if(d.cashBills)     _acceptIncomingList('nrj_cash_bills','nrj_deleted_cashbill_ids',Array.isArray(d.cashBills)?d.cashBills:Object.values(d.cashBills));
+        if(d.quickBuyers)   _acceptIncomingList('nrj_quick_buyers','nrj_deleted_quickbuyer_ids',Array.isArray(d.quickBuyers)?d.quickBuyers:Object.values(d.quickBuyers));
         if(d.branchOfficers) localStorage.setItem('nrj_branch_officers',JSON.stringify(d.branchOfficers));
         if(d.branchEmails)   localStorage.setItem('nrj_branch_emails',  JSON.stringify(d.branchEmails));
         // Refresh settings UI if open
@@ -14667,6 +14749,7 @@ function downloadFullBackup(auto=false) {
     customers:   JSON.parse(localStorage.getItem('nrj_customers')||'[]'),
     expenses:    JSON.parse(localStorage.getItem('nrj_expenses')||'[]'),
     cashBills:   JSON.parse(localStorage.getItem('nrj_cash_bills')||'[]'),
+    quickBuyers: JSON.parse(localStorage.getItem('nrj_quick_buyers')||'[]'),
     settings:    JSON.parse(localStorage.getItem('nrj_settings')||'{}'),
   };
 
