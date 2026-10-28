@@ -600,6 +600,14 @@ window.addEventListener('load', function(){
           <div class="field span2"><label>Cash-in-Charge Officer (Sri/Smt)</label><input id="a-cashIncharge" type="text" placeholder="Name of bank officer present"></div>
           <div class="field"><label>Place</label><input id="a-place" type="text" placeholder="e.g. Lohogaon, Pune"></div>
           <div class="field"><label>Date of Appraisal</label><input id="a-certDate" type="date" onchange="onCertDateChange('a')"></div>
+          <div class="field span2">
+            <label>Method(s) Used for Purity Testing</label>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:6px">
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" id="a-method-touchstone" value="Touch Stone Method" onchange="_saveLastMethodsA()" style="width:16px;height:16px;cursor:pointer"> Touch Stone Method</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" id="a-method-nitric" value="Nitric Acid Test" onchange="_saveLastMethodsA()" style="width:16px;height:16px;cursor:pointer"> Nitric Acid Test</label>
+              <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:400"><input type="checkbox" id="a-method-gravity" value="Specific Gravity Test" onchange="_saveLastMethodsA()" style="width:16px;height:16px;cursor:pointer"> Specific Gravity Test</label>
+            </div>
+          </div>
           <div class="field span2" style="background:#fffbf0;border:1.5px solid #d4a017;border-radius:7px;padding:10px 12px;">
             <label style="color:#7a4f00;font-size:12px;font-weight:700">24 Carat Gold Rate (Rs./g) — saved permanently</label>
             <input id="rate24k" type="number" step="1" placeholder="e.g. 8182" oninput="saveRate24k(); applyRate24kToAll('a');" style="font-size:16px;font-weight:700;color:#b8860b;border-color:#d4a017;background:#fffef5;margin-top:5px">
@@ -4218,7 +4226,10 @@ function aCollectFormData() {
     netLoan:    document.getElementById('a-netLoanAmt').value||'',
     loanDuration: document.getElementById('a-loanDuration')?.value||'',
     certDate:   fmtDate(document.getElementById('a-certDate').value),
-    recNo:      document.getElementById('a-recNo')?.value.trim()||''
+    recNo:      document.getElementById('a-recNo')?.value.trim()||'',
+    testMethods: ['a-method-touchstone','a-method-nitric','a-method-gravity']
+                   .filter(id=>document.getElementById(id)?.checked)
+                   .map(id=>document.getElementById(id).value)
   };
 }
 
@@ -4293,7 +4304,7 @@ function aGenerateCert() {
     </tr></thead><tbody>${itemRowsHTML}${blankRows}
       <tr class="total-row"><td></td><td><b>TOTAL</b></td><td class="c"><b>${tQty}</b></td><td class="c"><b>${pad(tGW)}</b></td><td></td><td></td><td class="c"><b>${pad(tNet)}</b></td><td class="r"><b>Rs.${Math.round(tMV).toLocaleString('en-IN')}/-</b></td></tr>
     </tbody></table>
-    <div class="cert-method"><b>Method(s) used for purity testing:</b> ☐ Touch Stone Method &nbsp; ☐ Nitric Acid Test &nbsp; ☐ Specific Gravity Test</div>
+    <div class="cert-method"><b>Method(s) used for purity testing:</b> ${['Touch Stone Method','Nitric Acid Test','Specific Gravity Test'].map(m=>_chk((d.testMethods||[]).includes(m))+' '+m).join(' &nbsp; ')}</div>
     <div class="cert-declaration">I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.</div>
     ${d.netLoan?`<div style="margin-bottom:6px;font-size:11px"><u><b>Net Loan Amount: Rs. ${d.netLoan}/-${d.loanDuration?' &nbsp;|&nbsp; Duration: '+d.loanDuration:''}</b></u></div>`:''}
     <div style="margin-bottom:10px;font-size:11px">Place: <u><b>${d.place}</b></u> &nbsp;&nbsp; Date: <u><b>${d.certDate}</b></u></div>
@@ -4641,7 +4652,7 @@ function bGenerateCert(){
         ${(()=>{
           const methods = d.testMethods||[];
           const all = ['Touch Stone Method','Nitric Acid Test','Specific Gravity Test'];
-          return all.map(m=>`<span style="margin-right:14px">${methods.includes(m)?'☑':'☐'} ${m}</span>`).join('');
+          return all.map(m=>`<span style="margin-right:14px">${_chk(methods.includes(m))} ${m}</span>`).join('');
         })()}
         <br>
         I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.
@@ -4738,6 +4749,7 @@ function bHandleUpload(event){
 // ═══════════════════════════════════════════════════════════
 
 function aResetForm() {
+  setTimeout(_restoreLastMethodsA, 0);
   // ── Clear all customer / bank fields (recNo cleared, will be regenerated by caller) ──
   const clearIds = [
     'a-custName','a-mobile','a-accNo','a-branch','a-bankName',
@@ -5093,12 +5105,23 @@ function generatePDF(){
   doc.text('Method(s) used for purity testing:',margin,y);y+=mLH;
   doc.setFont('helvetica','normal');
   const _methods_b = d.testMethods||[];
-  const _mLine_b = [
-    (_methods_b.includes('Touch Stone Method')?'[x]':'[ ]')+' Touch Stone Method',
-    (_methods_b.includes('Nitric Acid Test')?'[x]':'[ ]')+' Nitric Acid Test',
-    (_methods_b.includes('Specific Gravity Test')?'[x]':'[ ]')+' Specific Gravity Test'
-  ].join('    ');
-  doc.text(_mLine_b,margin,y);y+=mLH+SP(2);
+  const _mItems_b = ['Touch Stone Method','Nitric Acid Test','Specific Gravity Test'];
+  const _bs = mFS*0.30;           // checkbox size (mm)
+  let _mx = margin;
+  doc.setDrawColor(0); doc.setLineWidth(0.25);
+  _mItems_b.forEach(m=>{
+    const on = _methods_b.includes(m);
+    const top = y - _bs*0.85;
+    doc.rect(_mx, top, _bs, _bs);                       // empty box
+    if(on){                                              // drawn tick mark (no font needed)
+      doc.setLineWidth(0.5);
+      doc.lines([[_bs*0.24,_bs*0.28],[_bs*0.43,-_bs*0.62]], _mx+_bs*0.18, top+_bs*0.52, [1,1], 'S');
+      doc.setLineWidth(0.25);
+    }
+    doc.text(m, _mx+_bs+1.5, y);
+    _mx += _bs + 1.5 + doc.getTextWidth(m) + 6;
+  });
+  y+=mLH+SP(2);
   const decl='I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.';
   const dLines=doc.splitTextToSize(decl,TW);
   doc.setFontSize(mFS);doc.text(dLines,margin,y);y+=dLines.length*mLH+4;
@@ -5352,12 +5375,14 @@ function editRecord(id) {
     navGo('pl61i','Appraiser Certificate');
     setTimeout(()=>{
       loadIntoFormA(rec);
+      _setMethods('a', rec.d && rec.d.testMethods);
       window._editingRecord = false;
     }, 150);
   } else {
     navGo('pl61iii','Second Verify');
     setTimeout(()=>{
       loadIntoFormB(rec);
+      _setMethods('b', rec.d && rec.d.testMethods);
       window._editingRecord = false;
     }, 150);
   }
@@ -5387,7 +5412,7 @@ function renderCertA(items, d) {
     <div class="cert-header"><div>The Branch Manager<br><b>${d.bankName}</b><br><b>${d.branch}</b></div><div style="text-align:right;font-size:11px">Mob. No.: <b>${d.mobile}</b><br>Ac. No.: <b>${d.accNo}</b></div></div>
     <div class="cert-body"><p>Dear Sir,</p><p style="margin-top:5px">I hereby certify that Sri/Smt. <u><b>${d.custName}</b></u> <u><b>${d.swdType}</b></u> <u><b>${d.swdOf}</b></u> Resident of <u><b>${d.residentOf}</b></u>, who has sought gold loan from the Bank is not my relative and the gold against which the loan is sought is not purchased from me. The ornaments/Coins have been weighted and appraised by me on <u><b>${d.certDate}</b></u> in the presence of Sri/Smt. <u><b>${d.cashIC||'________________________'}</b></u> (Cash in charge) and the exact weight, purity of the metal and market value of each item as on date are indicated below.</p>${mktRateLine?`<p style="margin-top:4px"><b>Market rate: ${mktRateLine}</b></p>`:''}</div>
     <table class="cert-table"><thead><tr><th style="width:26px">Sl.<br>No.</th><th>Description of the Article</th><th style="width:30px">Qty</th><th style="width:52px">Gross<br>Wt.(g)</th><th style="width:50px">Approx.<br>Stone Wt.<br>(g)</th><th style="width:52px">Purity<br>(Carat)<br>&amp; Rate</th><th style="width:52px">Net<br>Wt.(g)</th><th style="width:72px">Market<br>Value Rs.</th></tr></thead><tbody>${itemRowsHTML}${blankRows}<tr class="total-row"><td></td><td><b>TOTAL</b></td><td class="c"><b>${tQty}</b></td><td class="c"><b>${pad(tGW)}</b></td><td></td><td></td><td class="c"><b>${pad(tNet)}</b></td><td class="r"><b>Rs.${Math.round(tMV).toLocaleString('en-IN')}/-</b></td></tr></tbody></table>
-    <div class="cert-method"><b>Method(s) used for purity testing:</b> ☐ Touch Stone Method &nbsp; ☐ Nitric Acid Test &nbsp; ☐ Specific Gravity Test</div>
+    <div class="cert-method"><b>Method(s) used for purity testing:</b> ${['Touch Stone Method','Nitric Acid Test','Specific Gravity Test'].map(m=>_chk((d.testMethods||[]).includes(m))+' '+m).join(' &nbsp; ')}</div>
     <div class="cert-declaration">I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.</div>
     ${d.netLoan?`<div style="margin-bottom:6px;font-size:11px"><u><b>Net Loan Amount: Rs. ${d.netLoan}/-</b></u></div>`:''}
     <div style="margin-bottom:10px;font-size:11px">Place: <u><b>${d.place}</b></u> &nbsp;&nbsp; Date: <b>${d.certDate}</b></div>
@@ -5427,7 +5452,7 @@ function renderCertB(items, d) {
         ${itemRowsHTML}${blankRows}
         <tr class="total-row"><td></td><td><b>Total</b></td><td class="c"><b>${tQty}</b></td><td class="c"><b>${pad(tGW)}</b></td><td></td><td></td><td class="c"><b>${pad(tNet)}</b></td><td class="r"><b>Rs.${Math.round(tMV).toLocaleString('en-IN')}/-</b></td></tr>
       </tbody></table>
-      <div style="margin-top:10px;font-size:11px"><b>Method (s) used for purity testing:</b><br>${allMethods.map(m=>`<span style="margin-right:14px">${methods.includes(m)?'☑':'☐'} ${m}</span>`).join('')}<br>I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.</div>
+      <div style="margin-top:10px;font-size:11px"><b>Method (s) used for purity testing:</b><br>${allMethods.map(m=>`<span style="margin-right:14px">${_chk(methods.includes(m))} ${m}</span>`).join('')}<br>I solemnly declare that weight, purity of the gold ornaments/precious stones indicated above are correct and I undertake to indemnify the Bank against any loss it may sustain on account of any inaccuracy in the above appraisal.</div>
       <div style="margin-top:8px;font-size:11px">Place: <span style="border-bottom:1px solid #000;min-width:80px;display:inline-block;padding:0 4px"><b>${d.place||''}</b></span>&nbsp;&nbsp;&nbsp;&nbsp;Date: <span style="border-bottom:1px solid #000;min-width:80px;display:inline-block;padding:0 4px"><b>${d.certDate||''}</b></span></div>
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <div style="text-align:right"><div style="font-size:11px;margin-bottom:6px">Yours faithfully</div>
@@ -8753,6 +8778,30 @@ function _brFind(map, name){
   const keys=Object.keys(map).reverse(); // later keys = user-saved, they win over defaults
   for(const k of keys){ if(_brTokens(k)===t) return k; }
   return undefined;
+}
+// ── Purity-testing method ticks (First + Second certificate) ──
+function _methodIds(form){
+  return form==='a' ? ['a-method-touchstone','a-method-nitric','a-method-gravity'] : ['b-method-touchstone','b-method-nitric','b-method-gravity'];
+}
+function _setMethods(form, list){
+  _methodIds(form).forEach(id=>{ const el=document.getElementById(id); if(el) el.checked = (list||[]).includes(el.value); });
+}
+function _saveLastMethodsA(){
+  try{
+    const sel=_methodIds('a').filter(id=>document.getElementById(id)?.checked).map(id=>document.getElementById(id).value);
+    localStorage.setItem('nrj_last_methods_a', JSON.stringify(sel));
+  }catch(e){}
+}
+function _restoreLastMethodsA(){
+  try{ _setMethods('a', JSON.parse(localStorage.getItem('nrj_last_methods_a')||'[]')); }catch(e){}
+}
+document.addEventListener('DOMContentLoaded', function(){ _restoreLastMethodsA(); });
+
+// Checkbox drawn as SVG (prints the same on every device — no font-dependent ☑/☒)
+function _chk(on){
+  return '<svg width="12" height="12" viewBox="0 0 12 12" style="vertical-align:-2px;margin-right:2px"><rect x="0.75" y="0.75" width="10.5" height="10.5" fill="none" stroke="#000" stroke-width="1.2"/>'
+    + (on ? '<polyline points="2.6,6.4 5,8.8 9.6,3.2" fill="none" stroke="#000" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>' : '')
+    + '</svg>';
 }
 function getBranchEmail(branchName) {
   if(!branchName) return '';
