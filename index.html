@@ -8742,32 +8742,23 @@ function saveBranchEmails(obj) {
   pushLoanToCloud();
 }
 
+// Branch names are compared word-by-word (order doesn't matter, noise words like BRANCH/SBI/PUNE ignored),
+// so "KHARADI" and "WTC KHARADI" are always treated as two different branches.
+function _brTokens(s){
+  const noise=['BRANCH','SBI','STATE','BANK','OF','INDIA','PUNE','THE'];
+  return String(s||'').toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').split(/\s+/).filter(w=>w && !noise.includes(w)).sort().join(' ');
+}
+function _brFind(map, name){
+  const t=_brTokens(name); if(!t || !map) return undefined;
+  const keys=Object.keys(map).reverse(); // later keys = user-saved, they win over defaults
+  for(const k of keys){ if(_brTokens(k)===t) return k; }
+  return undefined;
+}
 function getBranchEmail(branchName) {
   if(!branchName) return '';
   const emails = getBranchEmails();
-  const clean = s => s.trim().toUpperCase().replace(/\s*BRANCH\s*/gi,'').trim();
-  const bClean = clean(branchName);
-  // 1. Exact match first
-  for(const [k,v] of Object.entries(emails)) {
-    if(clean(k)===bClean) return v;
-  }
-  // 2. Saved/custom entries take priority over partial match
-  const saved = JSON.parse(localStorage.getItem('nrj_branch_emails')||'{}');
-  for(const [k,v] of Object.entries(saved)) {
-    const kClean = clean(k);
-    if(bClean.includes(kClean) && kClean.length>=4) return v;
-    if(kClean.includes(bClean) && bClean.length>=4) return v;
-  }
-  // 3. Default partial match — only match if very similar length (prevents KHARADI matching WTC KHARADI)
-  for(const [k,v] of Object.entries(emails)) {
-    const kClean = clean(k);
-    if(kClean===bClean) continue; // already tried exact
-    // Only partial match if they share the same root word (e.g. DHANORI BRANCH vs DHANORI)
-    if(kClean.length>=6 && bClean.length>=6 && Math.abs(kClean.length-bClean.length)<=3) {
-      if(bClean.includes(kClean) || kClean.includes(bClean)) return v;
-    }
-  }
-  return '';
+  const k = _brFind(emails, branchName);
+  return k ? emails[k] : '';
 }
 
 // Auto-fill branch email when branch field changes
@@ -8849,13 +8840,8 @@ function saveBranchOfficers(obj) {
 function getBranchOfficer(branchName) {
   if(!branchName) return null;
   const officers = getBranchOfficers();
-  const key = branchName.trim().toUpperCase().replace(/\s*BRANCH\s*/i,'').trim();
-  for(const [k,v] of Object.entries(officers)) {
-    if(k.toUpperCase()===key || branchName.toUpperCase().includes(k.toUpperCase())) {
-      return v; // {cashIC, custodian}
-    }
-  }
-  return null;
+  const k = _brFind(officers, branchName);
+  return k ? officers[k] : null; // {cashIC, custodian}
 }
 
 // Called when branch name changes
@@ -9209,10 +9195,7 @@ function generateNextRecNo_B() {
   if(defaultBranch) {
     setField('b-branch', defaultBranch);
     // Find officers for this branch
-    const officer = officers.find(o =>
-      (o.branch||'').toLowerCase().includes(defaultBranch.toLowerCase()) ||
-      defaultBranch.toLowerCase().includes((o.branch||'').toLowerCase())
-    ) || officers[0];
+    const officer = (typeof getBranchOfficer==='function') ? getBranchOfficer(defaultBranch) : null;
     if(officer) {
       setField('b-cashIncharge', officer.cashIC || officer.cashIncharge || '');
       setField('b-cashPFID',     officer.cashPFID || '');
