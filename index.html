@@ -1977,6 +1977,76 @@ function getAllInvoicesForGST() {
   return [...gstInvs, ...saleInvs];
 }
 
+// ═══ PER-ENTRY CLOUD SYNC (payments, invoices, cash bills, records, quick buyers) ═══
+// Every entry is its own item in the cloud, and every delete leaves a "deleted" marker in the cloud too.
+// So: a payment/bill added on one device reaches all devices, a delete reaches all devices,
+// and an old copy on one device can never overwrite or bring back what another device changed.
+function _fbKey(id){ return String(id).replace(/[.#$\/\[\]%]/g, c=>'%'+('0'+c.charCodeAt(0).toString(16)).slice(-2)); }
+function _cloudToArr(v){
+  if(!v) return [];
+  if(Array.isArray(v)) return v.filter(x=>x!==null && x!==undefined);
+  return Object.keys(v).sort((a,b)=>{ const na=Number(a), nb=Number(b); return (isNaN(na)||isNaN(nb)) ? a.localeCompare(b) : na-nb; }).map(k=>v[k]).filter(x=>x!==null && x!==undefined);
+}
+function _fixIdsG(arr){
+  return arr.map(item=>{
+    if(item && item.id && typeof item.id==='string') item.id = Number(item.id)||item.id;
+    if(item && item.recordId !== undefined && item.recordId !== null) item.recordId = Number(item.recordId)||null;
+    if(item && item.invId !== undefined && item.invId !== null) item.invId = Number(item.invId)||null;
+    return item;
+  });
+}
+function _sortNewestFirst(arr, idField){
+  if(!arr.every(x=>x && x[idField]!==undefined && !isNaN(Number(x[idField])))) return arr;
+  return arr.slice().sort((a,b)=>Number(b[idField])-Number(a[idField]));
+}
+// Send only what changed between prevArr and newArr (adds/edits as items, deletes as removals + cloud marker)
+function _syncWrite(child, idField, prevArr, newArr){
+  if(typeof _loanFbRef==='undefined' || !_loanFbRef) return;
+  const prevMap = new Map((prevArr||[]).filter(x=>x && x[idField]!==undefined).map(x=>[String(x[idField]), JSON.stringify(x)]));
+  const newMap  = new Map((newArr ||[]).filter(x=>x && x[idField]!==undefined).map(x=>[String(x[idField]), x]));
+  const changed = [...newMap.entries()].filter(([id,x])=>prevMap.get(id)!==JSON.stringify(x));
+  const removed = [...prevMap.keys()].filter(id=>!newMap.has(id));
+  if(!changed.length && !removed.length) return;
+  const ref = _loanFbRef.child(child);
+  ref.once('value').then(snap=>{
+    const v = snap.val() || {};
+    const keyOf = {};
+    Object.keys(v).forEach(k=>{ const it=v[k]; if(it && it[idField]!==undefined){ (keyOf[String(it[idField])] = keyOf[String(it[idField])] || []).push(k); } });
+    const up = {};
+    changed.forEach(([id,x])=>{
+      const ks = keyOf[id];
+      const k = (ks && ks.length) ? ks[0] : _fbKey(id);
+      up[child+'/'+k] = JSON.parse(JSON.stringify(x));
+      if(ks) ks.slice(1).forEach(d=>{ up[child+'/'+d] = null; });
+      if(!prevMap.has(id)) up['deleted/'+child+'/'+_fbKey(id)] = null;   // newly added / restored → no longer "deleted"
+    });
+    removed.forEach(id=>{
+      (keyOf[id]||[]).forEach(k=>{ up[child+'/'+k] = null; });
+      up['deleted/'+child+'/'+_fbKey(id)] = Date.now();                    // tell every device it was deleted
+    });
+    return _loanFbRef.update(up);
+  }).catch(e=>console.error('Cloud sync failed for '+child+':', e));
+}
+// Apply the cloud's list of one collection to this device (called by the live listener)
+function _applyCloudCollection(d, child, storageKey, idField){
+  idField = idField || 'id';
+  d = d || {};
+  const tombObj = (d.deleted && d.deleted[child]) || {};
+  const isTomb  = id => Object.prototype.hasOwnProperty.call(tombObj, _fbKey(id));
+  const byId = new Map();
+  _fixIdsG(_cloudToArr(d[child])).forEach(x=>{
+    if(x && x[idField]!==undefined && !isTomb(x[idField])) byId.set(String(x[idField]), x);
+  });
+  let local = [];
+  try{ local = JSON.parse(localStorage.getItem(storageKey)||'[]'); }catch(e){}
+  const noId = local.filter(x=>!x || x[idField]===undefined);
+  const localOnly = local.filter(x=>x && x[idField]!==undefined && !byId.has(String(x[idField])) && !isTomb(x[idField]));
+  const result = _sortNewestFirst(Array.from(byId.values()).concat(localOnly), idField).concat(noId);
+  const json = JSON.stringify(result);
+  if(json !== localStorage.getItem(storageKey)) localStorage.setItem(storageKey, json);
+  if(localOnly.length) _syncWrite(child, idField, [], localOnly);   // entries the cloud never received → upload them
+}
+
 // ── Safe sync helpers (invoices / payments) ──
 // Anything that disappears from the local list because of a real save (delete, edit)
 // is remembered as a "tombstone", so a stale cloud copy can never bring it back,
@@ -2038,10 +2108,10 @@ function _acceptIncomingList(storageKey, tombKey, incomingArr, idField) {
     localStorage.setItem(storageKey, incoming);
   }
 }
-function _baseSaveInvoices(arr) { _tombstoneRemoved('nrj_invoices','nrj_deleted_invoice_ids',arr); localStorage.setItem('nrj_invoices', JSON.stringify(arr)); updateInvoiceBadges(); _safeCloudWrite('invoices','nrj_invoices','nrj_deleted_invoice_ids',arr,updateInvoiceBadges); }
+function _baseSaveInvoices(arr) { let _p=[]; try{_p=JSON.parse(localStorage.getItem('nrj_invoices')||'[]');}catch(e){} localStorage.setItem('nrj_invoices', JSON.stringify(arr)); updateInvoiceBadges(); _syncWrite('invoices','id',_p,arr); }
 function saveInvoices(arr) { _baseSaveInvoices(arr); triggerAutoSave(); }
 function getPayments() { try{return JSON.parse(localStorage.getItem('nrj_payments')||'[]');}catch(e){return[];} }
-function _baseSavePayments(arr) { _tombstoneRemoved('nrj_payments','nrj_deleted_payment_ids',arr); localStorage.setItem('nrj_payments', JSON.stringify(arr)); updateInvoiceBadges(); _safeCloudWrite('payments','nrj_payments','nrj_deleted_payment_ids',arr,updateInvoiceBadges); }
+function _baseSavePayments(arr) { let _p=[]; try{_p=JSON.parse(localStorage.getItem('nrj_payments')||'[]');}catch(e){} localStorage.setItem('nrj_payments', JSON.stringify(arr)); updateInvoiceBadges(); _syncWrite('payments','id',_p,arr); }
 function savePayments(arr) { _baseSavePayments(arr); triggerAutoSave(); }
 
 function updateInvoiceBadges() {
@@ -2097,9 +2167,9 @@ function autoUpdateInvNo() {
 function _qbEsc(x){ return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function getQuickBuyers(){ try{ return JSON.parse(localStorage.getItem('nrj_quick_buyers')||'[]'); }catch(e){ return []; } }
 function saveQuickBuyers(arr){
-  _tombstoneRemoved('nrj_quick_buyers','nrj_deleted_quickbuyer_ids',arr);
+  let _p=[]; try{_p=JSON.parse(localStorage.getItem('nrj_quick_buyers')||'[]');}catch(e){}
   localStorage.setItem('nrj_quick_buyers', JSON.stringify(arr));
-  try{ _safeCloudWrite('quickBuyers','nrj_quick_buyers','nrj_deleted_quickbuyer_ids',arr); }catch(e){}
+  try{ _syncWrite('quickBuyers','id',_p,arr); }catch(e){}
 }
 function renderQuickBuyers(){
   const box = document.getElementById('inv-quick-buyers'); if(!box) return;
@@ -4845,9 +4915,10 @@ function refreshPanel(panel, btn) {
       _loanFbRef.once('value', snap => {
         const d = snap.val();
         if(d) {
-          if(d.records)        _acceptIncomingList('nrj_records','nrj_deleted_record_ids',Object.values(d.records));
-          if(d.invoices)       _acceptIncomingList('nrj_invoices','nrj_deleted_invoice_ids',Object.values(d.invoices));
-          if(d.payments)       _acceptIncomingList('nrj_payments','nrj_deleted_payment_ids',Object.values(d.payments));
+          _applyCloudCollection(d,'records','nrj_records');
+          _applyCloudCollection(d,'invoices','nrj_invoices');
+          _applyCloudCollection(d,'payments','nrj_payments');
+          _applyCloudCollection(d,'cashBills','nrj_cash_bills');
           if(d.customers)      _acceptIncomingList('nrj_customers','nrj_deleted_customer_keys',Object.values(d.customers),'key');
           if(d.expenses)       localStorage.setItem('nrj_expenses',        JSON.stringify(Object.values(d.expenses)));
           if(d.bankAccounts)   localStorage.setItem('nrj_bank_accounts',   JSON.stringify(Object.values(d.bankAccounts)));
@@ -5220,45 +5291,10 @@ function getRecords() {
 }
 
 function _baseSaveRecords(recs) {
-  try {
-    const _ids = new Set(recs.map(r=>String(r.id)));
-    const _t = JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]').filter(t=>!_ids.has(String(t.id)));
-    localStorage.setItem('nrj_deleted_record_ids', JSON.stringify(_t));
-  } catch(e){}
+  let _p=[]; try{_p=JSON.parse(localStorage.getItem('nrj_records')||'[]');}catch(e){}
   localStorage.setItem('nrj_records', JSON.stringify(recs));
   updateRecordsBadge();
-  // Single write path only — direct child write WITHOUT the debounced full-root push
-  // (avoids race condition where two writes interleave and the listener re-syncs stale data)
-  if(_loanFbRef) {
-    // Anti-data-loss guard: before overwriting the cloud's records list, check whether
-    // the cloud has any record (e.g. saved moments ago from another device/tab) that this
-    // local copy doesn't know about yet — if so, merge it back in instead of erasing it.
-    // Explicitly-deleted records (tombstones) are never resurrected this way.
-    _loanFbRef.child('records').once('value').then(snap=>{
-      const cloudVal = snap.val();
-      let cloudArr = [];
-      if(cloudVal) cloudArr = Array.isArray(cloudVal) ? cloudVal : Object.keys(cloudVal).sort((a,b)=>Number(a)-Number(b)).map(k=>cloudVal[k]);
-      let tomb = [];
-      try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]')).map(t=>t.id); } catch(e){}
-      const localIds = new Set(recs.map(r=>r.id));
-      const merged = recs.slice();
-      cloudArr.forEach(r=>{
-        if(r && !localIds.has(r.id) && !tomb.includes(r.id)) merged.push(r);
-      });
-      if(merged.length !== recs.length) {
-        localStorage.setItem('nrj_records', JSON.stringify(merged));
-        updateRecordsBadge();
-        if(document.getElementById('report-records')?.style.display !== 'none') renderRecords();
-      }
-      _loanFbRef.child('records').set(merged).catch(e=>console.error('Firebase save error:',e));
-    }).catch(e=>{
-      console.error('Firebase merge-check failed, saving as-is:', e);
-      _loanFbRef.child('records').set(recs).catch(e2=>console.error('Firebase save error:',e2));
-    });
-  } else {
-    // Offline — queue the debounced full sync for when connection returns
-    pushLoanToCloud();
-  }
+  _syncWrite('records','id',_p,recs);
 }
 function saveRecords(recs) { _baseSaveRecords(recs); triggerAutoSave(); }
 
@@ -6845,32 +6881,7 @@ function initLoanFirebase(cfg){
             return item;
           });
         }
-        if(d.records) {
-          const incomingArr = fixIds(fbToArr(d.records));
-          const incoming = JSON.stringify(incomingArr);
-          const current  = localStorage.getItem('nrj_records')||'[]';
-          if(incoming !== current) {
-            // Safety net: never let an incoming snapshot silently shrink the local record
-            // count. If it looks smaller, only accept it when every "missing" record is
-            // one we actually deleted (tombstoned) ourselves — otherwise this is most likely
-            // a stale/in-flight cloud snapshot, not a real deletion, so keep local as-is.
-            let currentArr = [];
-            try { currentArr = JSON.parse(current); } catch(e){}
-            if(incomingArr.length < currentArr.length) {
-              let tomb = [];
-              try { tomb = (JSON.parse(localStorage.getItem('nrj_deleted_record_ids')||'[]')).map(t=>t.id); } catch(e){}
-              const incomingIds = new Set(incomingArr.map(r=>r.id));
-              const unexplainedMissing = currentArr.some(r=>!incomingIds.has(r.id) && !tomb.includes(r.id));
-              if(unexplainedMissing) {
-                console.warn('Ignored a smaller records snapshot from cloud — looked stale, kept local copy.');
-              } else {
-                localStorage.setItem('nrj_records', incoming);
-              }
-            } else {
-              localStorage.setItem('nrj_records', incoming);
-            }
-          }
-        }
+        _applyCloudCollection(d,'records','nrj_records');
         if(d.customers) {
           const incomingArr = fixIds(fbToArr(d.customers));
           const incoming = JSON.stringify(incomingArr);
@@ -6893,8 +6904,6 @@ function initLoanFirebase(cfg){
             }
           }
         }
-        if(d.invoices)     _acceptIncomingList('nrj_invoices','nrj_deleted_invoice_ids',fixIds(fbToArr(d.invoices)));
-        if(d.payments)     _acceptIncomingList('nrj_payments','nrj_deleted_payment_ids',fixIds(fbToArr(d.payments)));
         if(d.settings)     localStorage.setItem('nrj_settings',      typeof d.settings==='string'?d.settings:JSON.stringify(d.settings));
         if(d.rate24k)      localStorage.setItem('nrj_rate24k',       d.rate24k);
         if(d.expenses)       localStorage.setItem('nrj_expenses',        JSON.stringify(fbToArr(d.expenses)));
@@ -6911,8 +6920,10 @@ function initLoanFirebase(cfg){
           }
         }
         if(d.purchases)    localStorage.setItem('nrj_purchases',     JSON.stringify(Array.isArray(d.purchases)?d.purchases:Object.values(d.purchases||{})));
-        if(d.cashBills)     _acceptIncomingList('nrj_cash_bills','nrj_deleted_cashbill_ids',Array.isArray(d.cashBills)?d.cashBills:Object.values(d.cashBills));
-        if(d.quickBuyers)   _acceptIncomingList('nrj_quick_buyers','nrj_deleted_quickbuyer_ids',Array.isArray(d.quickBuyers)?d.quickBuyers:Object.values(d.quickBuyers));
+        _applyCloudCollection(d,'invoices','nrj_invoices');
+        _applyCloudCollection(d,'payments','nrj_payments');
+        _applyCloudCollection(d,'cashBills','nrj_cash_bills');
+        _applyCloudCollection(d,'quickBuyers','nrj_quick_buyers');
         if(d.branchOfficers) localStorage.setItem('nrj_branch_officers',JSON.stringify(d.branchOfficers));
         if(d.branchEmails)   localStorage.setItem('nrj_branch_emails',  JSON.stringify(d.branchEmails));
         // Refresh settings UI if open
@@ -6940,6 +6951,10 @@ function initLoanFirebase(cfg){
         // Also refresh rate input if visible
         const rateEl=document.getElementById('rate24k');
         if(rateEl&&d.rate24k&&rateEl!==document.activeElement)rateEl.value=d.rate24k;
+      }
+      else {
+        // Cloud is empty — send this device's data up so nothing is lost
+        try{ [['records','nrj_records'],['invoices','nrj_invoices'],['payments','nrj_payments'],['cashBills','nrj_cash_bills'],['quickBuyers','nrj_quick_buyers']].forEach(c=>_applyCloudCollection({},c[0],c[1])); }catch(e){}
       }
       showLoanSyncBadge('live');
     },err=>{console.warn('FB loan error',err);showLoanSyncBadge('error');});
@@ -9357,9 +9372,9 @@ let cbItemCount = 0;
 
 function getCashBills() { try{ return JSON.parse(localStorage.getItem(CB_KEY)||'[]'); }catch(e){ return []; } }
 function saveCashBills(arr) {
-  _tombstoneRemoved(CB_KEY,'nrj_deleted_cashbill_ids',arr);
+  let _p=[]; try{_p=JSON.parse(localStorage.getItem(CB_KEY)||'[]');}catch(e){}
   localStorage.setItem(CB_KEY, JSON.stringify(arr));
-  try{ _safeCloudWrite('cashBills', CB_KEY, 'nrj_deleted_cashbill_ids', arr); }catch(e){}
+  try{ _syncWrite('cashBills','id',_p,arr); }catch(e){}
 }
 
 function nextCashBillNo() {
